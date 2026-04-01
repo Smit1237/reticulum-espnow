@@ -58,8 +58,8 @@ static size_t last_txb = 0;
 void updateDisplay() {
 	if (!Display::isOn()) return;
 	Display::showStatus(true, "TRANSPORT",
-	                    (unsigned long)espnow_interface.rxb(),
 	                    (unsigned long)espnow_interface.txb(),
+	                    (unsigned long)espnow_interface.rxb(),
 	                    (unsigned long)ESP.getFreeHeap());
 }
 
