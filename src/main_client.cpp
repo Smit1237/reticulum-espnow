@@ -6,6 +6,7 @@
 #include <esp_wifi.h>
 #include <esp_now.h>
 
+#include <Preferences.h>
 #include "board_config.h"
 
 // ============================================================
@@ -54,6 +55,10 @@ static char bleName[20] = "RNode";
 static volatile bool showingPin = false;
 static volatile uint32_t pairingPin = 0;
 static volatile bool pairingMode = false;
+
+// Display on/off state (persisted to NVS)
+static Preferences prefs;
+static bool displayOn = true;
 
 // Status icons 8x8 XBM format (U8g2 native)
 // Disconnected: empty circle
@@ -385,6 +390,7 @@ void oled_show_pin(uint32_t pin) {
 
 void oled_update() {
 	if (showingPin) return;  // Don't overwrite PIN display
+	if (!displayOn) { u8g2.clearBuffer(); u8g2.sendBuffer(); return; }
 
 	char buf[20];
 	u8g2.clearBuffer();
@@ -430,10 +436,17 @@ void setup() {
 	digitalWrite(LED_USER_PIN, HIGH);
 	pinMode(BUTTON_BOOT_PIN, INPUT_PULLUP);
 
+	// Read display state from NVS
+	prefs.begin("rnode", false);
+	displayOn = prefs.getBool("disp", true);
+	prefs.end();
+	Serial.printf("Display: %s (from NVS)\n", displayOn ? "ON" : "OFF");
+
 	// OLED
 	Wire.begin(OLED_SDA, OLED_SCL);
 	u8g2.setBusClock(400000);
 	u8g2.begin();
+	if (!displayOn) u8g2.setPowerSave(1);  // Hardware power off
 	u8g2.clearBuffer();
 	u8g2.setFont(u8g2_font_5x7_tf);
 	u8g2.drawXBM(0, 0, 8, 8, icon_disconn);
@@ -523,40 +536,79 @@ void loop() {
 		}
 	}
 
-	// BOOT button: hold 2+ seconds to enter pairing mode
-	static unsigned long btnPressStart = 0;
-	static bool btnWasPressed = false;
-	if (digitalRead(BUTTON_BOOT_PIN) == LOW) {
-		if (!btnWasPressed) {
-			btnPressStart = millis();
-			btnWasPressed = true;
-		} else if (millis() - btnPressStart > 2000 && !pairingMode) {
-			// Long press — enter pairing mode
-			Serial.println("BOOT: entering pairing mode");
-			pairingMode = true;
+	// BOOT button: double-tap = toggle display, long press (2s) = pairing mode
+	static unsigned long btnDownAt = 0;
+	static unsigned long lastTapAt = 0;
+	static bool btnDown = false;
+	static bool longPressHandled = false;
 
-			// Disconnect current client if connected
-			if (bleConnected && pServer) {
-				pServer->disconnect(pServer->getPeerInfo(0).getConnHandle());
-			}
+	bool pressed = (digitalRead(BUTTON_BOOT_PIN) == LOW);
 
-			// Clear all bonding data so new device can pair
-			NimBLEDevice::deleteAllBonds();
-			Serial.println("BOOT: bonds cleared, advertising for new pairing");
+	if (pressed && !btnDown) {
+		// Button just pressed
+		btnDown = true;
+		btnDownAt = millis();
+		longPressHandled = false;
+	}
 
-			// Restart advertising
-			NimBLEDevice::startAdvertising();
-			oled_update();
+	if (pressed && btnDown && !longPressHandled && millis() - btnDownAt > 2000) {
+		// Long press — pairing mode
+		longPressHandled = true;
+		Serial.println("BOOT: entering pairing mode");
+		pairingMode = true;
 
-			// LED feedback — rapid blink
-			for (int i = 0; i < 6; i++) {
-				digitalWrite(LED_USER_PIN, i % 2);
-				delay(100);
-			}
-			digitalWrite(LED_USER_PIN, LOW);
+		if (bleConnected && pServer) {
+			pServer->disconnect(pServer->getPeerInfo(0).getConnHandle());
 		}
-	} else {
-		btnWasPressed = false;
+		NimBLEDevice::deleteAllBonds();
+		Serial.println("BOOT: bonds cleared, advertising for new pairing");
+		NimBLEDevice::startAdvertising();
+
+		// Turn display on for pairing (temporarily override)
+		if (!displayOn) {
+			u8g2.setPowerSave(0);
+			displayOn = true;
+		}
+		oled_update();
+
+		for (int i = 0; i < 6; i++) {
+			digitalWrite(LED_USER_PIN, i % 2);
+			delay(100);
+		}
+		digitalWrite(LED_USER_PIN, LOW);
+	}
+
+	if (!pressed && btnDown) {
+		// Button released
+		btnDown = false;
+		unsigned long pressDur = millis() - btnDownAt;
+
+		if (!longPressHandled && pressDur < 500) {
+			// Short tap — check for double-tap
+			if (millis() - lastTapAt < 400) {
+				// Double-tap detected — toggle display
+				displayOn = !displayOn;
+				Serial.printf("Display: %s\n", displayOn ? "ON" : "OFF");
+
+				// Persist to NVS
+				prefs.begin("rnode", false);
+				prefs.putBool("disp", displayOn);
+				prefs.end();
+
+				if (displayOn) {
+					u8g2.setPowerSave(0);
+					oled_update();
+				} else {
+					u8g2.clearBuffer();
+					u8g2.sendBuffer();
+					u8g2.setPowerSave(1);
+				}
+
+				lastTapAt = 0;  // Reset so triple-tap doesn't re-trigger
+			} else {
+				lastTapAt = millis();
+			}
+		}
 	}
 
 	// OLED
