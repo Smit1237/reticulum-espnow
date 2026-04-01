@@ -23,13 +23,5 @@
 // ESP-NOW
 #define ESPNOW_CHANNEL  1     // WiFi channel for ESP-NOW
 
-// WiFi TX power (units of 0.25 dBm, applied to ESP-NOW)
-// 80 = 20 dBm (max, ~200m LOS, ~150mA)
-// 68 = 17 dBm (~150m, ~140mA)
-// 52 = 13 dBm (~100m, ~130mA)
-// 34 = 8.5 dBm (~50m, ~125mA)
-// -4 = -1 dBm (~10m, ~120mA)
-#define ESPNOW_TX_POWER 80    // 20 dBm max
-
 // Board identity
 #define BOARD_NAME      "ESP32-C3 ESP-NOW Node"
