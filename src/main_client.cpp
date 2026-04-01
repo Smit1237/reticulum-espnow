@@ -140,7 +140,11 @@ class ServerCB : public NimBLEServerCallbacks {
 		updateDisplay();
 	}
 	void onMTUChange(uint16_t MTU, NimBLEConnInfo& ci) override {
-		Serial.printf("BLE: MTU changed to %u\r\n", MTU);
+		static uint16_t lastMTU = 0;
+		if (MTU != lastMTU) {
+			Serial.printf("BLE: MTU %u\r\n", MTU);
+			lastMTU = MTU;
+		}
 	}
 
 	// Called when NimBLE needs to display a passkey for pairing
@@ -252,23 +256,24 @@ void kiss_send_data(const uint8_t* payload, size_t len) {
 // =============== KISS frame handler ===============
 
 void handle_kiss_frame() {
+	static bool handshake_logged = false;
+
 	switch (kiss_cmd) {
 	case CMD_DETECT:
 		if (kiss_len >= 1 && kiss_buf[0] == DETECT_REQ) {
-			Serial.println("KISS: DETECT");
+			if (!handshake_logged) Serial.println("KISS: handshake\r\n");
 			kiss_respond1(CMD_DETECT, DETECT_RESP);
 		}
 		break;
 
 	case CMD_DATA:
 		if (kiss_len > 0) {
-			Serial.printf("KISS->ESPNOW: %u bytes\r\n", kiss_len);
+			handshake_logged = true;  // Stop logging handshake after first data
 			esp_err_t err = esp_now_send(BROADCAST_ADDR, kiss_buf, kiss_len);
 			if (err == ESP_OK) {
 				tx_count++;
-				Serial.printf("  TX OK (total %lu)\r\n", tx_count);
 			} else {
-				Serial.printf("  TX FAIL 0x%X\r\n", err);
+				Serial.printf("ESP-NOW TX FAIL 0x%X\r\n", err);
 			}
 			delay(2);
 			kiss_respond1(CMD_READY, 0x01);
@@ -276,22 +281,18 @@ void handle_kiss_frame() {
 		break;
 
 	case CMD_FW_VERSION:
-		Serial.println("KISS: FW_VERSION query");
 		{ uint8_t ver[] = {FW_MAJ, FW_MIN}; kiss_respond(CMD_FW_VERSION, ver, 2); }
 		break;
 
 	case CMD_PLATFORM:
-		Serial.println("KISS: PLATFORM query");
 		kiss_respond1(CMD_PLATFORM, PLATFORM_ESP32);
 		break;
 
 	case CMD_MCU:
-		Serial.println("KISS: MCU query");
 		kiss_respond1(CMD_MCU, MCU_ESP32);
 		break;
 
 	case CMD_BOARD:
-		Serial.println("KISS: BOARD query");
 		kiss_respond1(CMD_BOARD, 0x40);
 		break;
 
@@ -304,13 +305,13 @@ void handle_kiss_frame() {
 	case CMD_TXPOWER:
 	case CMD_SF:
 	case CMD_CR:
-		Serial.printf("KISS: radio 0x%02X -> ACK\r\n", kiss_cmd);
+		// Radio config ACK — silent
 		delay(5);
 		kiss_respond(kiss_cmd, kiss_buf, kiss_len);
 		break;
 
 	case CMD_RADIO_STATE:
-		Serial.printf("KISS: RADIO_STATE %d\r\n", kiss_len > 0 ? kiss_buf[0] : -1);
+		// Radio state — silent
 		delay(5);
 		kiss_respond1(CMD_RADIO_STATE, kiss_len > 0 ? kiss_buf[0] : 0x01);
 		break;
