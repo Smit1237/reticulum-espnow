@@ -1,10 +1,7 @@
 #include <Arduino.h>
 #include "board_config.h"
+#include "Display.h"
 
-#if HAS_OLED
-#include <Wire.h>
-#include <U8g2lib.h>
-#endif
 #include <Preferences.h>
 
 #include <microStore/FileSystem.h>
@@ -20,47 +17,17 @@
 #include <Type.h>
 #include <Utilities/OS.h>
 
-#include "board_config.h"
-
-// --- OLED ---
-#if HAS_OLED
-U8G2_SSD1306_72X40_ER_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
-
-static const uint8_t icon_radio[] = {
-	0x00, 0x70, 0x18, 0x64, 0x12, 0x4A, 0x2A, 0x2A
-};
-#endif
-
-// Display on/off state (persisted to NVS)
 static Preferences prefs;
-static bool displayOn = true;
 
 RNS::Reticulum reticulum({RNS::Type::NONE});
 RNS::Interface espnow_interface({RNS::Type::NONE});
 
-// --- OLED update ---
-
-void oled_update() {
-#if HAS_OLED
-	if (!displayOn) { u8g2.clearBuffer(); u8g2.sendBuffer(); return; }
-
-	char buf[20];
-	u8g2.clearBuffer();
-	u8g2.drawXBM(0, 0, 8, 8, icon_radio);
-	u8g2.setFont(u8g2_font_5x7_tf);
-	u8g2.drawStr(10, 7, "TRANSPORT");
-
-	snprintf(buf, sizeof(buf), "RX: %lu", (unsigned long)espnow_interface.rxb());
-	u8g2.drawStr(0, 17, buf);
-
-	snprintf(buf, sizeof(buf), "TX: %lu", (unsigned long)espnow_interface.txb());
-	u8g2.drawStr(0, 27, buf);
-
-	snprintf(buf, sizeof(buf), "heap:%lu", (unsigned long)ESP.getFreeHeap());
-	u8g2.drawStr(0, 37, buf);
-
-	u8g2.sendBuffer();
-#endif
+void updateDisplay() {
+	if (!Display::isOn()) return;
+	Display::showStatus(true, "TRANSPORT",
+	                    (unsigned long)espnow_interface.rxb(),
+	                    (unsigned long)espnow_interface.txb(),
+	                    (unsigned long)ESP.getFreeHeap());
 }
 
 // --- Reticulum setup ---
@@ -81,10 +48,9 @@ void reticulum_setup() {
 		espnow_interface.start();
 
 		// Tune table sizes for ESP32-C3 (~144KB free after boot)
-		// Use ~70KB for tables, leave ~74KB headroom for runtime
-		RNS::Transport::path_table_maxsize(48);      // ~48KB (most important)
-		RNS::Transport::announce_table_maxsize(24);   // ~17KB
-		RNS::Transport::hashlist_maxsize(128);        // ~5KB
+		RNS::Transport::path_table_maxsize(48);
+		RNS::Transport::announce_table_maxsize(24);
+		RNS::Transport::hashlist_maxsize(128);
 		INFOF("Table limits: paths=%u announces=%u hashlist=%u",
 			RNS::Transport::path_table_maxsize(),
 			RNS::Transport::announce_table_maxsize(),
@@ -114,35 +80,24 @@ void setup() {
 	digitalWrite(LED_USER_PIN, HIGH);
 	pinMode(BUTTON_BOOT_PIN, INPUT_PULLUP);
 
-#if HAS_OLED
+	// Display init
+	Display::init();
 	prefs.begin("rnode", false);
-	displayOn = prefs.getBool("disp", true);
+	bool displayOn = prefs.getBool("disp", true);
 	prefs.end();
-
-	Wire.begin(OLED_SDA, OLED_SCL);
-	u8g2.setBusClock(400000);
-	u8g2.begin();
-	if (!displayOn) u8g2.setPowerSave(1);
-
-	u8g2.clearBuffer();
-	u8g2.setFont(u8g2_font_5x7_tf);
-	u8g2.drawXBM(0, 0, 8, 8, icon_radio);
-	u8g2.drawStr(10, 7, "TRANSPORT");
-	u8g2.drawStr(0, 17, "booting...");
-	u8g2.sendBuffer();
-#endif
+	if (!displayOn) Display::setPowerSave(true);
+	Display::showBootScreen("TRANSPORT", "booting...");
 
 	RNS::loglevel(RNS::LOG_TRACE);
 	reticulum_setup();
 
 	digitalWrite(LED_USER_PIN, LOW);
-	oled_update();
+	updateDisplay();
 }
 
 void loop() {
 	reticulum.loop();
 
-#if HAS_OLED
 	// BOOT button: double-tap = toggle display
 	static unsigned long lastTapAt = 0;
 	static bool btnDown = false;
@@ -161,33 +116,26 @@ void loop() {
 
 		if (dur < 500) {
 			if (millis() - lastTapAt < 400) {
-				displayOn = !displayOn;
-				Serial.printf("Display: %s\n", displayOn ? "ON" : "OFF");
+				bool on = !Display::isOn();
+				Serial.printf("Display: %s\n", on ? "ON" : "OFF");
+				Display::setPowerSave(!on);
 
 				prefs.begin("rnode", false);
-				prefs.putBool("disp", displayOn);
+				prefs.putBool("disp", on);
 				prefs.end();
 
-				if (displayOn) {
-					u8g2.setPowerSave(0);
-					oled_update();
-				} else {
-					u8g2.clearBuffer();
-					u8g2.sendBuffer();
-					u8g2.setPowerSave(1);
-				}
+				if (on) updateDisplay();
 				lastTapAt = 0;
 			} else {
 				lastTapAt = millis();
 			}
 		}
 	}
-#endif
 
 	// Update display every 2 seconds
 	static unsigned long last_display = 0;
 	if (millis() - last_display > 2000) {
-		oled_update();
+		updateDisplay();
 		last_display = millis();
 	}
 

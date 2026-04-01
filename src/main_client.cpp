@@ -1,10 +1,7 @@
 #include <Arduino.h>
 #include "board_config.h"
+#include "Display.h"
 
-#if HAS_OLED
-#include <Wire.h>
-#include <U8g2lib.h>
-#endif
 #include <NimBLEDevice.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
@@ -47,11 +44,6 @@
 #define NUS_RX_UUID      "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
 #define NUS_TX_UUID      "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 
-// --- OLED ---
-#if HAS_OLED
-U8G2_SSD1306_72X40_ER_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
-#endif
-
 // BLE name stored globally for display
 static char bleName[20] = "RNode";
 
@@ -62,33 +54,6 @@ static volatile bool pairingMode = false;
 
 // Display on/off state (persisted to NVS)
 static Preferences prefs;
-static bool displayOn = true;
-
-#if HAS_OLED
-// Status icons 8x8 XBM format (U8g2 native)
-// Disconnected: empty circle
-static const uint8_t icon_disconn[] = {
-	0x3C, // ..XXXX..
-	0x42, // .X....X.
-	0x81, // X......X
-	0x81, // X......X
-	0x81, // X......X
-	0x81, // X......X
-	0x42, // .X....X.
-	0x3C  // ..XXXX..
-};
-// Connected: filled circle
-static const uint8_t icon_conn[] = {
-	0x3C, // ..XXXX..
-	0x7E, // .XXXXXX.
-	0xFF, // XXXXXXXX
-	0xFF, // XXXXXXXX
-	0xFF, // XXXXXXXX
-	0xFF, // XXXXXXXX
-	0x7E, // .XXXXXX.
-	0x3C  // ..XXXX..
-};
-#endif // HAS_OLED
 
 // --- BLE globals ---
 static NimBLEServer*         pServer = nullptr;
@@ -126,8 +91,8 @@ static bool     kiss_escape = false;
 // =============== BLE callbacks ===============
 
 // Forward declaration
-void oled_show_pin(uint32_t pin);  // Shows on OLED if available, always on Serial
-void oled_update();
+void showPairingPin(uint32_t pin);
+void updateDisplay();
 
 class ServerCB : public NimBLEServerCallbacks {
 	void onConnect(NimBLEServer* s, NimBLEConnInfo& ci) override {
@@ -140,7 +105,7 @@ class ServerCB : public NimBLEServerCallbacks {
 		Serial.printf("BLE: DISCONNECTED (reason=%d)\n", reason);
 		NimBLEDevice::startAdvertising();
 		Serial.println("BLE: re-advertising");
-		oled_update();
+		updateDisplay();
 	}
 	void onMTUChange(uint16_t MTU, NimBLEConnInfo& ci) override {
 		Serial.printf("BLE: MTU changed to %u\n", MTU);
@@ -152,7 +117,7 @@ class ServerCB : public NimBLEServerCallbacks {
 		pairingPin = esp_random() % 1000000;
 		showingPin = true;
 		Serial.printf("BLE: PAIRING PIN: %06lu\n", pairingPin);
-		oled_show_pin(pairingPin);
+		showPairingPin(pairingPin);
 		return pairingPin;
 	}
 
@@ -164,7 +129,7 @@ class ServerCB : public NimBLEServerCallbacks {
 			Serial.println("BLE: pairing FAILED, disconnecting");
 			NimBLEDevice::getServer()->disconnect(ci.getConnHandle());
 		}
-		oled_update();
+		updateDisplay();
 	}
 };
 
@@ -380,56 +345,21 @@ void kiss_feed(uint8_t byte) {
 
 // =============== OLED ===============
 
-// Show pairing PIN — always on Serial, OLED if available
-void oled_show_pin(uint32_t pin) {
-	Serial.printf("\n*** PAIRING PIN: %06lu ***\n\n", pin);
-#if HAS_OLED
-	char pinStr[8];
-	snprintf(pinStr, sizeof(pinStr), "%06lu", pin);
-	u8g2.clearBuffer();
-	u8g2.setFont(u8g2_font_5x7_tf);
-	u8g2.drawStr(14, 7, "PAIR PIN:");
-	u8g2.setFont(u8g2_font_profont22_tn);
-	u8g2.drawStr(0, 35, pinStr);
-	u8g2.sendBuffer();
-#endif
+void showPairingPin(uint32_t pin) {
+	Serial.printf("\n*** PAIRING PIN: %06lu ***\n\n", (unsigned long)pin);
+	Display::showPin(pin);
 }
 
-void oled_update() {
-#if HAS_OLED
+void updateDisplay() {
 	if (showingPin) return;
-	if (!displayOn) { u8g2.clearBuffer(); u8g2.sendBuffer(); return; }
-
-	char buf[20];
-	u8g2.clearBuffer();
-	u8g2.setFont(u8g2_font_5x7_tf);
+	if (!Display::isOn()) return;
 
 	if (pairingMode && !bleConnected) {
-		u8g2.drawXBM(0, 0, 8, 8, icon_disconn);
-		u8g2.drawStr(10, 7, bleName);
-		u8g2.drawStr(0, 20, "PAIRING...");
-		u8g2.drawStr(0, 30, "Connect from");
-		u8g2.drawStr(0, 38, "phone now");
+		Display::showPairingMode(bleName);
 	} else {
-		if (bleConnected)
-			u8g2.drawXBM(0, 0, 8, 8, icon_conn);
-		else
-			u8g2.drawXBM(0, 0, 8, 8, icon_disconn);
-
-		u8g2.drawStr(10, 7, bleName);
-
-		snprintf(buf, sizeof(buf), "TX: %lu", tx_count);
-		u8g2.drawStr(0, 17, buf);
-
-		snprintf(buf, sizeof(buf), "RX: %lu", rx_count);
-		u8g2.drawStr(0, 27, buf);
-
-		snprintf(buf, sizeof(buf), "heap:%lu", (unsigned long)ESP.getFreeHeap());
-		u8g2.drawStr(0, 37, buf);
+		Display::showStatus(bleConnected, bleName, tx_count, rx_count,
+		                    (unsigned long)ESP.getFreeHeap());
 	}
-
-	u8g2.sendBuffer();
-#endif
 }
 
 // =============== SETUP ===============
@@ -443,25 +373,13 @@ void setup() {
 	digitalWrite(LED_USER_PIN, HIGH);
 	pinMode(BUTTON_BOOT_PIN, INPUT_PULLUP);
 
-#if HAS_OLED
-	// Read display state from NVS
+	// Display init
+	Display::init();
 	prefs.begin("rnode", false);
-	displayOn = prefs.getBool("disp", true);
+	bool displayOn = prefs.getBool("disp", true);
 	prefs.end();
-	Serial.printf("Display: %s (from NVS)\n", displayOn ? "ON" : "OFF");
-
-	// OLED init
-	Wire.begin(OLED_SDA, OLED_SCL);
-	u8g2.setBusClock(400000);
-	u8g2.begin();
-	if (!displayOn) u8g2.setPowerSave(1);
-	u8g2.clearBuffer();
-	u8g2.setFont(u8g2_font_5x7_tf);
-	u8g2.drawXBM(0, 0, 8, 8, icon_disconn);
-	u8g2.drawStr(10, 7, "RNode");
-	u8g2.drawStr(0, 17, "booting...");
-	u8g2.sendBuffer();
-#endif
+	if (!displayOn) Display::setPowerSave(true);
+	Display::showBootScreen("RNode", "booting...");
 
 	// Step 1: WiFi + ESP-NOW
 	espnow_rx_queue = xQueueCreate(ESPNOW_RX_QUEUE_SIZE, sizeof(espnow_rx_pkt_t));
@@ -523,7 +441,7 @@ void setup() {
 	Serial.println("Bridge ready.");
 
 	digitalWrite(LED_USER_PIN, LOW);
-	oled_update();
+	updateDisplay();
 }
 
 // =============== LOOP ===============
@@ -573,14 +491,11 @@ void loop() {
 		Serial.println("BOOT: bonds cleared, advertising for new pairing");
 		NimBLEDevice::startAdvertising();
 
-#if HAS_OLED
-		// Turn display on for pairing (temporarily override)
-		if (!displayOn) {
-			u8g2.setPowerSave(0);
-			displayOn = true;
+		// Turn display on for pairing
+		if (!Display::isOn()) {
+			Display::setPowerSave(false);
 		}
-#endif
-		oled_update();
+		updateDisplay();
 
 		for (int i = 0; i < 6; i++) {
 			digitalWrite(LED_USER_PIN, i % 2);
@@ -597,24 +512,16 @@ void loop() {
 		if (!longPressHandled && pressDur < 500) {
 			// Short tap — check for double-tap
 			if (millis() - lastTapAt < 400) {
-#if HAS_OLED
 				// Double-tap detected — toggle display
-				displayOn = !displayOn;
-				Serial.printf("Display: %s\n", displayOn ? "ON" : "OFF");
+				bool on = !Display::isOn();
+				Serial.printf("Display: %s\n", on ? "ON" : "OFF");
+				Display::setPowerSave(!on);
 
 				prefs.begin("rnode", false);
-				prefs.putBool("disp", displayOn);
+				prefs.putBool("disp", on);
 				prefs.end();
 
-				if (displayOn) {
-					u8g2.setPowerSave(0);
-					oled_update();
-				} else {
-					u8g2.clearBuffer();
-					u8g2.sendBuffer();
-					u8g2.setPowerSave(1);
-				}
-#endif
+				if (on) updateDisplay();
 				lastTapAt = 0;
 			} else {
 				lastTapAt = millis();
@@ -624,7 +531,7 @@ void loop() {
 
 	// OLED
 	static unsigned long lastDisp = 0;
-	if (millis() - lastDisp > 2000) { oled_update(); lastDisp = millis(); }
+	if (millis() - lastDisp > 2000) { updateDisplay(); lastDisp = millis(); }
 
 	// Heartbeat (only when not in pairing mode)
 	static unsigned long lastBlink = 0;
