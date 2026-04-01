@@ -96,3 +96,10 @@
 
 // ESP-NOW
 #define ESPNOW_CHANNEL  1       // WiFi channel for ESP-NOW
+
+// Transport node re-announce interval (milliseconds)
+// Default 2 hours — matches Python Reticulum behavior
+// Important for multi-hop chains where distant nodes need periodic rediscovery
+#ifndef TRANSPORT_ANNOUNCE_INTERVAL_MS
+#define TRANSPORT_ANNOUNCE_INTERVAL_MS  (2 * 60 * 60 * 1000UL)  // 2 hours
+#endif

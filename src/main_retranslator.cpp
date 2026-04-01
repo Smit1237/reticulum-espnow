@@ -50,6 +50,7 @@ inline void led_reset() {
 RNS::Reticulum reticulum({RNS::Type::NONE});
 RNS::Interface espnow_interface({RNS::Type::NONE});
 
+
 // Track RX/TX for LED activity
 static size_t last_rxb = 0;
 static size_t last_txb = 0;
@@ -262,22 +263,24 @@ void setup() {
 void loop() {
 	reticulum.loop();
 
+	// NOTE: Periodic transport re-announce not implemented on C3 due to
+	// microReticulum abort() during announce rebroadcast on constrained hardware.
+	// Single-hop ESP-NOW broadcast doesn't need it — all nodes hear initial announce.
+	// For multi-hop chains, use S3 retranslator which has more resources.
+
 	// BOOT button: double-tap = toggle display, hold 5s = factory reset
 	static unsigned long lastTapAt = 0;
 	static bool btnDown = false;
 	static unsigned long btnDownAt = 0;
-	static bool longPressHandled = false;
 
 	bool pressed = (digitalRead(BUTTON_BOOT_PIN) == LOW);
 
 	if (pressed && !btnDown) {
 		btnDown = true;
 		btnDownAt = millis();
-		longPressHandled = false;
 	}
 
-	if (pressed && btnDown && !longPressHandled && millis() - btnDownAt > 5000) {
-		longPressHandled = true;
+	if (pressed && btnDown && millis() - btnDownAt > 5000) {
 		factory_reset();  // Never returns
 	}
 
@@ -285,7 +288,7 @@ void loop() {
 		btnDown = false;
 		unsigned long dur = millis() - btnDownAt;
 
-		if (!longPressHandled && dur < 500) {
+		if (dur < 500) {
 			if (millis() - lastTapAt < 400) {
 				bool on = !Display::isOn();
 				Serial.printf("Display: %s\r\n", on ? "ON" : "OFF");
