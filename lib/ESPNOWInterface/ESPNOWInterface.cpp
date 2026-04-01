@@ -54,6 +54,14 @@ bool ESPNOWInterface::start() {
 	// Disable WiFi power saving for lower latency
 	esp_wifi_set_ps(WIFI_PS_NONE);
 
+	// Set TX power
+#ifdef ESPNOW_TX_POWER
+	esp_wifi_set_max_tx_power(ESPNOW_TX_POWER);
+	int8_t actual_power = 0;
+	esp_wifi_get_max_tx_power(&actual_power);
+	INFOF("ESP-NOW: TX power set to %.1f dBm", actual_power * 0.25f);
+#endif
+
 	// Initialize ESP-NOW
 	esp_err_t result = esp_now_init();
 	if (result != ESP_OK) {
