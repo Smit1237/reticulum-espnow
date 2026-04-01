@@ -8,6 +8,38 @@
 #include <esp_now.h>
 #include <Preferences.h>
 
+// Dual serial output for boards with both USB CDC and UART (e.g. ESP32-S3)
+#ifdef DUAL_SERIAL
+  #define DualSerial(x)  do { Serial.x; Serial0.x; } while(0)
+  #define DualPrintf(...) do { Serial.printf(__VA_ARGS__); Serial0.printf(__VA_ARGS__); } while(0)
+#else
+  #define DualSerial(x)  Serial.x
+  #define DualPrintf(...) Serial.printf(__VA_ARGS__)
+#endif
+
+// LED helpers — support both simple GPIO and RGB NeoPixel
+inline void led_on() {
+#ifdef LED_RGB_PIN
+	neopixelWrite(LED_RGB_PIN, 2, 2, 2);  // dim white
+#elif LED_USER_PIN >= 0
+	digitalWrite(LED_USER_PIN, HIGH);
+#endif
+}
+inline void led_off() {
+#ifdef LED_RGB_PIN
+	neopixelWrite(LED_RGB_PIN, 0, 0, 0);
+#elif LED_USER_PIN >= 0
+	digitalWrite(LED_USER_PIN, LOW);
+#endif
+}
+inline void led_pairing() {
+#ifdef LED_RGB_PIN
+	neopixelWrite(LED_RGB_PIN, 0, 0, 8);  // dim blue
+#elif LED_USER_PIN >= 0
+	digitalWrite(LED_USER_PIN, HIGH);
+#endif
+}
+
 // ============================================================
 // KISS framing — RNodeInterface protocol
 // ============================================================
@@ -124,6 +156,7 @@ class ServerCB : public NimBLEServerCallbacks {
 	void onAuthenticationComplete(NimBLEConnInfo& ci) override {
 		showingPin = false;
 		pairingMode = false;
+		led_off();
 		Serial.printf("BLE: AUTH complete, encrypted=%d, bonded=%d\n", ci.isEncrypted(), ci.isBonded());
 		if (!ci.isEncrypted()) {
 			Serial.println("BLE: pairing FAILED, disconnecting");
@@ -346,7 +379,7 @@ void kiss_feed(uint8_t byte) {
 // =============== OLED ===============
 
 void showPairingPin(uint32_t pin) {
-	Serial.printf("\n*** PAIRING PIN: %06lu ***\n\n", (unsigned long)pin);
+	DualPrintf("\n*** PAIRING PIN: %06lu ***\n\n", (unsigned long)pin);
 	Display::showPin(pin);
 }
 
@@ -366,11 +399,16 @@ void updateDisplay() {
 
 void setup() {
 	Serial.begin(115200);
+#ifdef DUAL_SERIAL
+	Serial0.begin(115200);  // UART0 for boards with both USB CDC + UART
+#endif
 	delay(500);
-	Serial.println("\n=== ESP-NOW RNode BLE Bridge ===");
+	DualPrintf("\n=== ESP-NOW RNode BLE Bridge ===\n");
 
+#if LED_USER_PIN >= 0
 	pinMode(LED_USER_PIN, OUTPUT);
-	digitalWrite(LED_USER_PIN, HIGH);
+#endif
+	led_on();
 	pinMode(BUTTON_BOOT_PIN, INPUT_PULLUP);
 
 	// Display init
@@ -391,7 +429,7 @@ void setup() {
 	if (esp_now_init() == ESP_OK) {
 		uint32_t ver = 0;
 		esp_now_get_version(&ver);
-		Serial.printf("ESP-NOW v%lu OK\n", ver);
+		DualPrintf("ESP-NOW v%lu OK\n", ver);
 		esp_now_register_send_cb(espnow_send_cb);
 		esp_now_register_recv_cb(espnow_recv_cb);
 		esp_now_peer_info_t peer = {};
@@ -436,11 +474,11 @@ void setup() {
 	pAdv->setMaxInterval(320);  // 200ms
 	pAdv->start();
 
-	Serial.printf("BLE: '%s' addr %s\n", bleName,
-	              NimBLEDevice::getAddress().toString().c_str());
-	Serial.println("Bridge ready.");
+	DualPrintf("BLE: '%s' addr %s\n", bleName,
+	           NimBLEDevice::getAddress().toString().c_str());
+	DualPrintf("Bridge ready.\n");
 
-	digitalWrite(LED_USER_PIN, LOW);
+	led_off();
 	updateDisplay();
 }
 
@@ -498,10 +536,10 @@ void loop() {
 		updateDisplay();
 
 		for (int i = 0; i < 6; i++) {
-			digitalWrite(LED_USER_PIN, i % 2);
+			if (i % 2) led_pairing(); else led_off();
 			delay(100);
 		}
-		digitalWrite(LED_USER_PIN, LOW);
+		led_pairing();  // Stay blue during pairing
 	}
 
 	if (!pressed && btnDown) {
@@ -529,16 +567,36 @@ void loop() {
 		}
 	}
 
-	// OLED
+	// Display update
 	static unsigned long lastDisp = 0;
 	if (millis() - lastDisp > 2000) { updateDisplay(); lastDisp = millis(); }
+
+	// Repeat pairing PIN on serial every 10s (critical for screenless boards)
+	if (showingPin && pairingPin > 0) {
+		static unsigned long lastPinPrint = 0;
+		if (millis() - lastPinPrint > 10000) {
+			DualPrintf("\n*** PAIRING PIN: %06lu ***\n\n", (unsigned long)pairingPin);
+			lastPinPrint = millis();
+		}
+	}
 
 	// Heartbeat (only when not in pairing mode)
 	static unsigned long lastBlink = 0;
 	if (!pairingMode && millis() - lastBlink > 5000) {
-		digitalWrite(LED_USER_PIN, HIGH);
+		led_on();
 		delay(50);
-		digitalWrite(LED_USER_PIN, LOW);
+		led_off();
 		lastBlink = millis();
+	}
+
+	// Steady dim blue LED while in pairing mode
+	if (pairingMode && !bleConnected) {
+		static unsigned long lastPairBlink = 0;
+		if (millis() - lastPairBlink > 1000) {
+			static bool pairLedOn = false;
+			pairLedOn = !pairLedOn;
+			if (pairLedOn) led_pairing(); else led_off();
+			lastPairBlink = millis();
+		}
 	}
 }

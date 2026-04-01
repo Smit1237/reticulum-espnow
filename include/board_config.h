@@ -39,7 +39,12 @@
 
 #define DISPLAY_TYPE    DISPLAY_NONE
 #define LED_PWR_PIN     -1
-#define LED_USER_PIN    48
+#define LED_USER_PIN    -1      // No simple GPIO LED
+#ifdef RGB_BUILTIN
+  #define LED_RGB_PIN   RGB_BUILTIN  // Use Arduino core's detected pin
+#else
+  #define LED_RGB_PIN   48      // Fallback: most S3 devkits use GPIO 48
+#endif
 #define BUTTON_BOOT_PIN 0
 #define HAS_PSRAM       1
 #define BOARD_NAME      "ESP32-S3 Node"
