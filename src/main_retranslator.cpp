@@ -74,7 +74,7 @@ void reticulum_setup() {
 void setup() {
 	Serial.begin(115200);
 	delay(500);
-	Serial.println("\n=== TRANSPORT NODE ===");
+	Serial.println("\r\n=== TRANSPORT NODE ===");
 
 	pinMode(LED_USER_PIN, OUTPUT);
 	digitalWrite(LED_USER_PIN, HIGH);
@@ -117,7 +117,7 @@ void loop() {
 		if (dur < 500) {
 			if (millis() - lastTapAt < 400) {
 				bool on = !Display::isOn();
-				Serial.printf("Display: %s\n", on ? "ON" : "OFF");
+				Serial.printf("Display: %s\r\n", on ? "ON" : "OFF");
 				Display::setPowerSave(!on);
 
 				prefs.begin("rnode", false);

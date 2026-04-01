@@ -129,18 +129,18 @@ void updateDisplay();
 class ServerCB : public NimBLEServerCallbacks {
 	void onConnect(NimBLEServer* s, NimBLEConnInfo& ci) override {
 		bleConnected = true;
-		Serial.printf("BLE: CONNECTED [%s] handle=%d\n", ci.getAddress().toString().c_str(), ci.getConnHandle());
+		Serial.printf("BLE: CONNECTED [%s] handle=%d\r\n", ci.getAddress().toString().c_str(), ci.getConnHandle());
 	}
 	void onDisconnect(NimBLEServer* s, NimBLEConnInfo& ci, int reason) override {
 		bleConnected = false;
 		showingPin = false;
-		Serial.printf("BLE: DISCONNECTED (reason=%d)\n", reason);
+		Serial.printf("BLE: DISCONNECTED (reason=%d)\r\n", reason);
 		NimBLEDevice::startAdvertising();
 		Serial.println("BLE: re-advertising");
 		updateDisplay();
 	}
 	void onMTUChange(uint16_t MTU, NimBLEConnInfo& ci) override {
-		Serial.printf("BLE: MTU changed to %u\n", MTU);
+		Serial.printf("BLE: MTU changed to %u\r\n", MTU);
 	}
 
 	// Called when NimBLE needs to display a passkey for pairing
@@ -148,7 +148,7 @@ class ServerCB : public NimBLEServerCallbacks {
 		// Generate random 6-digit PIN
 		pairingPin = esp_random() % 1000000;
 		showingPin = true;
-		Serial.printf("BLE: PAIRING PIN: %06lu\n", pairingPin);
+		Serial.printf("BLE: PAIRING PIN: %06lu\r\n", pairingPin);
 		showPairingPin(pairingPin);
 		return pairingPin;
 	}
@@ -157,7 +157,7 @@ class ServerCB : public NimBLEServerCallbacks {
 		showingPin = false;
 		pairingMode = false;
 		led_off();
-		Serial.printf("BLE: AUTH complete, encrypted=%d, bonded=%d\n", ci.isEncrypted(), ci.isBonded());
+		Serial.printf("BLE: AUTH complete, encrypted=%d, bonded=%d\r\n", ci.isEncrypted(), ci.isBonded());
 		if (!ci.isEncrypted()) {
 			Serial.println("BLE: pairing FAILED, disconnecting");
 			NimBLEDevice::getServer()->disconnect(ci.getConnHandle());
@@ -183,7 +183,7 @@ class RxCB : public NimBLECharacteristicCallbacks {
 		}
 	}
 	void onSubscribe(NimBLECharacteristic* pChar, NimBLEConnInfo& ci, uint16_t subValue) override {
-		Serial.printf("BLE: TX notifications %s\n", subValue ? "SUBSCRIBED" : "unsubscribed");
+		Serial.printf("BLE: TX notifications %s\r\n", subValue ? "SUBSCRIBED" : "unsubscribed");
 	}
 };
 
@@ -262,13 +262,13 @@ void handle_kiss_frame() {
 
 	case CMD_DATA:
 		if (kiss_len > 0) {
-			Serial.printf("KISS->ESPNOW: %u bytes\n", kiss_len);
+			Serial.printf("KISS->ESPNOW: %u bytes\r\n", kiss_len);
 			esp_err_t err = esp_now_send(BROADCAST_ADDR, kiss_buf, kiss_len);
 			if (err == ESP_OK) {
 				tx_count++;
-				Serial.printf("  TX OK (total %lu)\n", tx_count);
+				Serial.printf("  TX OK (total %lu)\r\n", tx_count);
 			} else {
-				Serial.printf("  TX FAIL 0x%X\n", err);
+				Serial.printf("  TX FAIL 0x%X\r\n", err);
 			}
 			delay(2);
 			kiss_respond1(CMD_READY, 0x01);
@@ -304,13 +304,13 @@ void handle_kiss_frame() {
 	case CMD_TXPOWER:
 	case CMD_SF:
 	case CMD_CR:
-		Serial.printf("KISS: radio 0x%02X -> ACK\n", kiss_cmd);
+		Serial.printf("KISS: radio 0x%02X -> ACK\r\n", kiss_cmd);
 		delay(5);
 		kiss_respond(kiss_cmd, kiss_buf, kiss_len);
 		break;
 
 	case CMD_RADIO_STATE:
-		Serial.printf("KISS: RADIO_STATE %d\n", kiss_len > 0 ? kiss_buf[0] : -1);
+		Serial.printf("KISS: RADIO_STATE %d\r\n", kiss_len > 0 ? kiss_buf[0] : -1);
 		delay(5);
 		kiss_respond1(CMD_RADIO_STATE, kiss_len > 0 ? kiss_buf[0] : 0x01);
 		break;
@@ -332,7 +332,7 @@ void handle_kiss_frame() {
 		break;
 
 	default:
-		Serial.printf("KISS: unhandled cmd 0x%02X (%u bytes)\n", kiss_cmd, kiss_len);
+		Serial.printf("KISS: unhandled cmd 0x%02X (%u bytes)\r\n", kiss_cmd, kiss_len);
 		break;
 	}
 }
@@ -379,7 +379,7 @@ void kiss_feed(uint8_t byte) {
 // =============== OLED ===============
 
 void showPairingPin(uint32_t pin) {
-	DualPrintf("\n*** PAIRING PIN: %06lu ***\n\n", (unsigned long)pin);
+	DualPrintf("\r\n*** PAIRING PIN: %06lu ***\r\n\r\n", (unsigned long)pin);
 	Display::showPin(pin);
 }
 
@@ -403,7 +403,7 @@ void setup() {
 	Serial0.begin(115200);  // UART0 for boards with both USB CDC + UART
 #endif
 	delay(500);
-	DualPrintf("\n=== ESP-NOW RNode BLE Bridge ===\n");
+	DualPrintf("\r\n=== ESP-NOW RNode BLE Bridge ===\r\n");
 
 #if LED_USER_PIN >= 0
 	pinMode(LED_USER_PIN, OUTPUT);
@@ -429,7 +429,7 @@ void setup() {
 	if (esp_now_init() == ESP_OK) {
 		uint32_t ver = 0;
 		esp_now_get_version(&ver);
-		DualPrintf("ESP-NOW v%lu OK\n", ver);
+		DualPrintf("ESP-NOW v%lu OK\r\n", ver);
 		esp_now_register_send_cb(espnow_send_cb);
 		esp_now_register_recv_cb(espnow_recv_cb);
 		esp_now_peer_info_t peer = {};
@@ -474,9 +474,9 @@ void setup() {
 	pAdv->setMaxInterval(320);  // 200ms
 	pAdv->start();
 
-	DualPrintf("BLE: '%s' addr %s\n", bleName,
+	DualPrintf("BLE: '%s' addr %s\r\n", bleName,
 	           NimBLEDevice::getAddress().toString().c_str());
-	DualPrintf("Bridge ready.\n");
+	DualPrintf("Bridge ready.\r\n");
 
 	led_off();
 	updateDisplay();
@@ -552,7 +552,7 @@ void loop() {
 			if (millis() - lastTapAt < 400) {
 				// Double-tap detected — toggle display
 				bool on = !Display::isOn();
-				Serial.printf("Display: %s\n", on ? "ON" : "OFF");
+				Serial.printf("Display: %s\r\n", on ? "ON" : "OFF");
 				Display::setPowerSave(!on);
 
 				prefs.begin("rnode", false);
@@ -575,7 +575,7 @@ void loop() {
 	if (showingPin && pairingPin > 0) {
 		static unsigned long lastPinPrint = 0;
 		if (millis() - lastPinPrint > 10000) {
-			DualPrintf("\n*** PAIRING PIN: %06lu ***\n\n", (unsigned long)pairingPin);
+			DualPrintf("\r\n*** PAIRING PIN: %06lu ***\r\n\r\n", (unsigned long)pairingPin);
 			lastPinPrint = millis();
 		}
 	}
