@@ -1,6 +1,10 @@
 #include <Arduino.h>
+#include "board_config.h"
+
+#if HAS_OLED
 #include <Wire.h>
 #include <U8g2lib.h>
+#endif
 #include <Preferences.h>
 
 #include <microStore/FileSystem.h>
@@ -19,23 +23,17 @@
 #include "board_config.h"
 
 // --- OLED ---
+#if HAS_OLED
 U8G2_SSD1306_72X40_ER_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
+
+static const uint8_t icon_radio[] = {
+	0x00, 0x70, 0x18, 0x64, 0x12, 0x4A, 0x2A, 0x2A
+};
+#endif
 
 // Display on/off state (persisted to NVS)
 static Preferences prefs;
 static bool displayOn = true;
-
-// Status icon: radio waves (transport active)
-static const uint8_t icon_radio[] = {
-	0x00, // ........
-	0x70, // .XXX....
-	0x18, // ...XX...
-	0x64, // .XX..X..
-	0x12, // ...X..X.
-	0x4A, // .X..X.X.
-	0x2A, // ..X.X.X.
-	0x2A  // ..X.X.X.
-};
 
 RNS::Reticulum reticulum({RNS::Type::NONE});
 RNS::Interface espnow_interface({RNS::Type::NONE});
@@ -43,29 +41,26 @@ RNS::Interface espnow_interface({RNS::Type::NONE});
 // --- OLED update ---
 
 void oled_update() {
+#if HAS_OLED
 	if (!displayOn) { u8g2.clearBuffer(); u8g2.sendBuffer(); return; }
 
 	char buf[20];
 	u8g2.clearBuffer();
-
-	// Row 1: radio icon + TRANSPORT label
 	u8g2.drawXBM(0, 0, 8, 8, icon_radio);
 	u8g2.setFont(u8g2_font_5x7_tf);
 	u8g2.drawStr(10, 7, "TRANSPORT");
 
-	// Row 2: RX bytes
 	snprintf(buf, sizeof(buf), "RX: %lu", (unsigned long)espnow_interface.rxb());
 	u8g2.drawStr(0, 17, buf);
 
-	// Row 3: TX bytes
 	snprintf(buf, sizeof(buf), "TX: %lu", (unsigned long)espnow_interface.txb());
 	u8g2.drawStr(0, 27, buf);
 
-	// Row 4: free heap
 	snprintf(buf, sizeof(buf), "heap:%lu", (unsigned long)ESP.getFreeHeap());
 	u8g2.drawStr(0, 37, buf);
 
 	u8g2.sendBuffer();
+#endif
 }
 
 // --- Reticulum setup ---
@@ -119,12 +114,11 @@ void setup() {
 	digitalWrite(LED_USER_PIN, HIGH);
 	pinMode(BUTTON_BOOT_PIN, INPUT_PULLUP);
 
-	// Read display state from NVS
+#if HAS_OLED
 	prefs.begin("rnode", false);
 	displayOn = prefs.getBool("disp", true);
 	prefs.end();
 
-	// OLED
 	Wire.begin(OLED_SDA, OLED_SCL);
 	u8g2.setBusClock(400000);
 	u8g2.begin();
@@ -136,6 +130,7 @@ void setup() {
 	u8g2.drawStr(10, 7, "TRANSPORT");
 	u8g2.drawStr(0, 17, "booting...");
 	u8g2.sendBuffer();
+#endif
 
 	RNS::loglevel(RNS::LOG_TRACE);
 	reticulum_setup();
@@ -147,6 +142,7 @@ void setup() {
 void loop() {
 	reticulum.loop();
 
+#if HAS_OLED
 	// BOOT button: double-tap = toggle display
 	static unsigned long lastTapAt = 0;
 	static bool btnDown = false;
@@ -186,6 +182,7 @@ void loop() {
 			}
 		}
 	}
+#endif
 
 	// Update display every 2 seconds
 	static unsigned long last_display = 0;
