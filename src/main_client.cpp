@@ -47,6 +47,38 @@
 // --- OLED ---
 U8G2_SSD1306_72X40_ER_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE);
 
+// BLE name stored globally for display
+static char bleName[20] = "RNode";
+
+// Pairing state
+static volatile bool showingPin = false;
+static volatile uint32_t pairingPin = 0;
+static volatile bool pairingMode = false;
+
+// Status icons 8x8 XBM format (U8g2 native)
+// Disconnected: empty circle
+static const uint8_t icon_disconn[] = {
+	0x3C, // ..XXXX..
+	0x42, // .X....X.
+	0x81, // X......X
+	0x81, // X......X
+	0x81, // X......X
+	0x81, // X......X
+	0x42, // .X....X.
+	0x3C  // ..XXXX..
+};
+// Connected: filled circle
+static const uint8_t icon_conn[] = {
+	0x3C, // ..XXXX..
+	0x7E, // .XXXXXX.
+	0xFF, // XXXXXXXX
+	0xFF, // XXXXXXXX
+	0xFF, // XXXXXXXX
+	0xFF, // XXXXXXXX
+	0x7E, // .XXXXXX.
+	0x3C  // ..XXXX..
+};
+
 // --- BLE globals ---
 static NimBLEServer*         pServer = nullptr;
 static NimBLECharacteristic* pTxChar = nullptr;
@@ -82,6 +114,10 @@ static bool     kiss_escape = false;
 
 // =============== BLE callbacks ===============
 
+// Forward declaration
+void oled_show_pin(uint32_t pin);
+void oled_update();
+
 class ServerCB : public NimBLEServerCallbacks {
 	void onConnect(NimBLEServer* s, NimBLEConnInfo& ci) override {
 		bleConnected = true;
@@ -89,15 +125,35 @@ class ServerCB : public NimBLEServerCallbacks {
 	}
 	void onDisconnect(NimBLEServer* s, NimBLEConnInfo& ci, int reason) override {
 		bleConnected = false;
+		showingPin = false;
 		Serial.printf("BLE: DISCONNECTED (reason=%d)\n", reason);
 		NimBLEDevice::startAdvertising();
 		Serial.println("BLE: re-advertising");
+		oled_update();
 	}
 	void onMTUChange(uint16_t MTU, NimBLEConnInfo& ci) override {
 		Serial.printf("BLE: MTU changed to %u\n", MTU);
 	}
+
+	// Called when NimBLE needs to display a passkey for pairing
+	uint32_t onPassKeyDisplay() override {
+		// Generate random 6-digit PIN
+		pairingPin = esp_random() % 1000000;
+		showingPin = true;
+		Serial.printf("BLE: PAIRING PIN: %06lu\n", pairingPin);
+		oled_show_pin(pairingPin);
+		return pairingPin;
+	}
+
 	void onAuthenticationComplete(NimBLEConnInfo& ci) override {
+		showingPin = false;
+		pairingMode = false;
 		Serial.printf("BLE: AUTH complete, encrypted=%d, bonded=%d\n", ci.isEncrypted(), ci.isBonded());
+		if (!ci.isEncrypted()) {
+			Serial.println("BLE: pairing FAILED, disconnecting");
+			NimBLEDevice::getServer()->disconnect(ci.getConnHandle());
+		}
+		oled_update();
 	}
 };
 
@@ -313,17 +369,53 @@ void kiss_feed(uint8_t byte) {
 
 // =============== OLED ===============
 
-void oled_update() {
-	char line1[20], line2[20], line3[20];
-	snprintf(line1, sizeof(line1), bleConnected ? "BLE:conn" : "BLE:wait");
-	snprintf(line2, sizeof(line2), "tx:%lu rx:%lu", tx_count, rx_count);
-	snprintf(line3, sizeof(line3), "heap:%lu", (unsigned long)ESP.getFreeHeap());
+// Show pairing PIN as large as possible on 72x40 display
+void oled_show_pin(uint32_t pin) {
+	char pinStr[8];
+	snprintf(pinStr, sizeof(pinStr), "%06lu", pin);
 
 	u8g2.clearBuffer();
 	u8g2.setFont(u8g2_font_5x7_tf);
-	u8g2.drawStr(0, 7, line1);
-	u8g2.drawStr(0, 17, line2);
-	u8g2.drawStr(0, 27, line3);
+	u8g2.drawStr(14, 7, "PAIR PIN:");
+	// Large font for the PIN digits — biggest that fits 6 chars in 72px
+	u8g2.setFont(u8g2_font_profont22_tn);  // ~12px wide digits
+	u8g2.drawStr(0, 35, pinStr);
+	u8g2.sendBuffer();
+}
+
+void oled_update() {
+	if (showingPin) return;  // Don't overwrite PIN display
+
+	char buf[20];
+	u8g2.clearBuffer();
+	u8g2.setFont(u8g2_font_5x7_tf);
+
+	if (pairingMode && !bleConnected) {
+		// Pairing mode — waiting for phone
+		u8g2.drawXBM(0, 0, 8, 8, icon_disconn);
+		u8g2.drawStr(10, 7, bleName);
+		u8g2.drawStr(0, 20, "PAIRING...");
+		u8g2.drawStr(0, 30, "Connect from");
+		u8g2.drawStr(0, 38, "phone now");
+	} else {
+		// Normal status
+		if (bleConnected)
+			u8g2.drawXBM(0, 0, 8, 8, icon_conn);
+		else
+			u8g2.drawXBM(0, 0, 8, 8, icon_disconn);
+
+		u8g2.drawStr(10, 7, bleName);
+
+		snprintf(buf, sizeof(buf), "TX: %lu", tx_count);
+		u8g2.drawStr(0, 17, buf);
+
+		snprintf(buf, sizeof(buf), "RX: %lu", rx_count);
+		u8g2.drawStr(0, 27, buf);
+
+		snprintf(buf, sizeof(buf), "heap:%lu", (unsigned long)ESP.getFreeHeap());
+		u8g2.drawStr(0, 37, buf);
+	}
+
 	u8g2.sendBuffer();
 }
 
@@ -336,6 +428,7 @@ void setup() {
 
 	pinMode(LED_USER_PIN, OUTPUT);
 	digitalWrite(LED_USER_PIN, HIGH);
+	pinMode(BUTTON_BOOT_PIN, INPUT_PULLUP);
 
 	// OLED
 	Wire.begin(OLED_SDA, OLED_SCL);
@@ -343,7 +436,8 @@ void setup() {
 	u8g2.begin();
 	u8g2.clearBuffer();
 	u8g2.setFont(u8g2_font_5x7_tf);
-	u8g2.drawStr(0, 7, "RNode");
+	u8g2.drawXBM(0, 0, 8, 8, icon_disconn);
+	u8g2.drawStr(10, 7, "RNode");
 	u8g2.drawStr(0, 17, "booting...");
 	u8g2.sendBuffer();
 
@@ -374,15 +468,14 @@ void setup() {
 	// Use last 2 bytes of MAC to make each node's BLE name unique
 	uint8_t mac[6];
 	esp_wifi_get_mac(WIFI_IF_STA, mac);
-	char bleName[20];
 	snprintf(bleName, sizeof(bleName), "RNode %02X%02X", mac[4], mac[5]);
 
 	NimBLEDevice::init(bleName);
 	NimBLEDevice::setMTU(512);
 
-	// Enable bonding — Sideband requires paired/bonded device
-	NimBLEDevice::setSecurityAuth(true, false, true);  // bonding, no MITM, secure connections
-	NimBLEDevice::setSecurityIOCap(BLE_HS_IO_NO_INPUT_OUTPUT);  // "just works" pairing
+	// Enable bonding with passkey display — PIN shown on OLED during pairing
+	NimBLEDevice::setSecurityAuth(true, true, true);  // bonding, MITM protection, secure connections
+	NimBLEDevice::setSecurityIOCap(BLE_HS_IO_DISPLAY_ONLY);  // display passkey on OLED
 
 	pServer = NimBLEDevice::createServer();
 	pServer->setCallbacks(&serverCB);
@@ -430,13 +523,49 @@ void loop() {
 		}
 	}
 
+	// BOOT button: hold 2+ seconds to enter pairing mode
+	static unsigned long btnPressStart = 0;
+	static bool btnWasPressed = false;
+	if (digitalRead(BUTTON_BOOT_PIN) == LOW) {
+		if (!btnWasPressed) {
+			btnPressStart = millis();
+			btnWasPressed = true;
+		} else if (millis() - btnPressStart > 2000 && !pairingMode) {
+			// Long press — enter pairing mode
+			Serial.println("BOOT: entering pairing mode");
+			pairingMode = true;
+
+			// Disconnect current client if connected
+			if (bleConnected && pServer) {
+				pServer->disconnect(pServer->getPeerInfo(0).getConnHandle());
+			}
+
+			// Clear all bonding data so new device can pair
+			NimBLEDevice::deleteAllBonds();
+			Serial.println("BOOT: bonds cleared, advertising for new pairing");
+
+			// Restart advertising
+			NimBLEDevice::startAdvertising();
+			oled_update();
+
+			// LED feedback — rapid blink
+			for (int i = 0; i < 6; i++) {
+				digitalWrite(LED_USER_PIN, i % 2);
+				delay(100);
+			}
+			digitalWrite(LED_USER_PIN, LOW);
+		}
+	} else {
+		btnWasPressed = false;
+	}
+
 	// OLED
 	static unsigned long lastDisp = 0;
 	if (millis() - lastDisp > 2000) { oled_update(); lastDisp = millis(); }
 
-	// Heartbeat
+	// Heartbeat (only when not in pairing mode)
 	static unsigned long lastBlink = 0;
-	if (millis() - lastBlink > 5000) {
+	if (!pairingMode && millis() - lastBlink > 5000) {
 		digitalWrite(LED_USER_PIN, HIGH);
 		delay(50);
 		digitalWrite(LED_USER_PIN, LOW);
