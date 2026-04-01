@@ -1,0 +1,6 @@
+# Name,   Type, SubType, Offset,  Size,    Flags
+# ESP32-S3 N16R8: 16MB flash — large app + 4MB filesystem for path persistence
+nvs,      data, nvs,     0x9000,  0x5000,
+otadata,  data, ota,     0xe000,  0x2000,
+app0,     app,  ota_0,   0x10000, 0x800000,
+spiffs,   data, spiffs,  0x810000,0x400000,
