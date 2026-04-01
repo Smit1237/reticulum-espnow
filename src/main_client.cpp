@@ -456,7 +456,7 @@ void setup() {
 
 	// Step 1: WiFi + ESP-NOW
 	espnow_rx_queue = xQueueCreate(ESPNOW_RX_QUEUE_SIZE, sizeof(espnow_rx_pkt_t));
-	WiFi.mode(WIFI_AP_STA);
+	WiFi.mode(WIFI_STA);
 	WiFi.disconnect();
 	esp_wifi_set_channel(ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE);
 	esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
