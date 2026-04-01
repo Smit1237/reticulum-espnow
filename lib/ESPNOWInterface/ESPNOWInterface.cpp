@@ -1,0 +1,167 @@
+#include "ESPNOWInterface.h"
+
+#include <Log.h>
+#include <Utilities/OS.h>
+
+#include <WiFi.h>
+#include <esp_wifi.h>
+#include <esp_now.h>
+
+#include <cstring>
+
+using namespace RNS;
+
+// Static member initialization
+QueueHandle_t ESPNOWInterface::_rx_queue = nullptr;
+
+// Broadcast MAC address
+static const uint8_t BROADCAST_ADDR[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+ESPNOWInterface::ESPNOWInterface(const char* name /*= "ESPNOWInterface"*/, uint8_t channel /*= 1*/)
+	: RNS::InterfaceImpl(name), _channel(channel)
+{
+	_IN  = true;
+	_OUT = true;
+	_bitrate  = 1000000;  // ESP-NOW theoretical max ~1 Mbps
+	_HW_MTU   = ESPNOW_MAX_PAYLOAD;
+}
+
+/*virtual*/ ESPNOWInterface::~ESPNOWInterface() {
+	stop();
+}
+
+bool ESPNOWInterface::start() {
+	_online = false;
+	INFO("ESP-NOW initializing...");
+
+	// Create RX queue (hold up to 16 packets)
+	if (!_rx_queue) {
+		_rx_queue = xQueueCreate(16, sizeof(rx_packet_t));
+		if (!_rx_queue) {
+			ERROR("ESP-NOW: failed to create RX queue");
+			return false;
+		}
+	}
+
+	// Initialize WiFi in STA mode (required for ESP-NOW)
+	WiFi.mode(WIFI_STA);
+	WiFi.disconnect();
+
+	// Set WiFi channel
+	esp_wifi_set_channel(_channel, WIFI_SECOND_CHAN_NONE);
+
+	// Disable WiFi power saving for lower latency
+	esp_wifi_set_ps(WIFI_PS_NONE);
+
+	// Initialize ESP-NOW
+	esp_err_t result = esp_now_init();
+	if (result != ESP_OK) {
+		ERRORF("ESP-NOW: init failed, error 0x%X", result);
+		return false;
+	}
+
+	// Check ESP-NOW version
+	uint32_t version = 0;
+	esp_now_get_version(&version);
+	INFOF("ESP-NOW initialized, version: %lu", version);
+
+	// Register callbacks
+	esp_now_register_send_cb(on_data_sent);
+	esp_now_register_recv_cb(on_data_recv);
+
+	// Add broadcast peer
+	esp_now_peer_info_t broadcast_peer = {};
+	memcpy(broadcast_peer.peer_addr, BROADCAST_ADDR, ESP_NOW_ETH_ALEN);
+	broadcast_peer.channel = _channel;
+	broadcast_peer.ifidx   = WIFI_IF_STA;
+	broadcast_peer.encrypt = false;
+
+	result = esp_now_add_peer(&broadcast_peer);
+	if (result != ESP_OK) {
+		ERRORF("ESP-NOW: failed to add broadcast peer, error 0x%X", result);
+		esp_now_deinit();
+		return false;
+	}
+
+	// Print local MAC address
+	uint8_t mac[6];
+	esp_wifi_get_mac(WIFI_IF_STA, mac);
+	INFOF("ESP-NOW: local MAC %02X:%02X:%02X:%02X:%02X:%02X",
+		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+	INFOF("ESP-NOW: channel %d, HW_MTU %u", _channel, _HW_MTU);
+
+	_online = true;
+	INFO("ESP-NOW init succeeded.");
+	return true;
+}
+
+void ESPNOWInterface::stop() {
+	if (_online) {
+		INFO("ESP-NOW deinitializing...");
+		esp_now_unregister_recv_cb();
+		esp_now_unregister_send_cb();
+		esp_now_deinit();
+		_online = false;
+	}
+}
+
+void ESPNOWInterface::loop() {
+	if (!_online) return;
+
+	// Process all queued received packets
+	rx_packet_t pkt;
+	while (xQueueReceive(_rx_queue, &pkt, 0) == pdTRUE) {
+		Bytes data(pkt.data, pkt.len);
+		on_incoming(data);
+	}
+}
+
+/*virtual*/ void ESPNOWInterface::send_outgoing(const Bytes& data) {
+	DEBUGF("%s.send_outgoing: %lu bytes", toString().c_str(), data.size());
+	try {
+		if (_online) {
+			if (data.size() > ESPNOW_MAX_PAYLOAD) {
+				ERRORF("ESP-NOW: packet too large (%lu > %u)", data.size(), ESPNOW_MAX_PAYLOAD);
+				return;
+			}
+
+			esp_err_t result = esp_now_send(BROADCAST_ADDR, data.data(), data.size());
+			if (result != ESP_OK) {
+				ERRORF("ESP-NOW: send failed, error 0x%X", result);
+			} else {
+				TRACEF("ESP-NOW: sent %lu bytes", data.size());
+			}
+
+			// Post-send housekeeping
+			InterfaceImpl::handle_outgoing(data);
+		}
+	}
+	catch (const std::exception& e) {
+		ERRORF("Could not transmit on %s: %s", toString().c_str(), e.what());
+	}
+}
+
+void ESPNOWInterface::on_incoming(const Bytes& data) {
+	DEBUGF("%s.on_incoming: %lu bytes", toString().c_str(), data.size());
+	InterfaceImpl::handle_incoming(data);
+}
+
+// Static callback: called from WiFi task context when data is sent
+/*static*/ void ESPNOWInterface::on_data_sent(const wifi_tx_info_t* tx_info, esp_now_send_status_t status) {
+	(void)tx_info;
+	if (status != ESP_NOW_SEND_SUCCESS) {
+		DEBUG("ESP-NOW: send callback reported failure");
+	}
+}
+
+// Static callback: called from WiFi task context when data is received
+/*static*/ void ESPNOWInterface::on_data_recv(const esp_now_recv_info_t* recv_info, const uint8_t* data, int data_len) {
+	if (!_rx_queue || data_len <= 0 || data_len > ESPNOW_MAX_PAYLOAD) return;
+
+	rx_packet_t pkt;
+	pkt.len = (uint16_t)data_len;
+	memcpy(pkt.data, data, data_len);
+
+	// Non-blocking queue send — drop packet if queue is full
+	xQueueSendFromISR(_rx_queue, &pkt, nullptr);
+}
