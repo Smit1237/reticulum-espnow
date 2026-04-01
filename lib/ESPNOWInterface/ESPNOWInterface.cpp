@@ -13,6 +13,7 @@ using namespace RNS;
 
 // Static member initialization
 QueueHandle_t ESPNOWInterface::_rx_queue = nullptr;
+uint8_t ESPNOWInterface::_local_mac[6] = {0};
 
 // Broadcast MAC address
 static const uint8_t BROADCAST_ADDR[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -83,11 +84,10 @@ bool ESPNOWInterface::start() {
 		return false;
 	}
 
-	// Print local MAC address
-	uint8_t mac[6];
-	esp_wifi_get_mac(WIFI_IF_STA, mac);
+	// Store and print local MAC address
+	esp_wifi_get_mac(WIFI_IF_STA, _local_mac);
 	INFOF("ESP-NOW: local MAC %02X:%02X:%02X:%02X:%02X:%02X",
-		mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+		_local_mac[0], _local_mac[1], _local_mac[2], _local_mac[3], _local_mac[4], _local_mac[5]);
 	INFOF("ESP-NOW: channel %d, HW_MTU %u", _channel, _HW_MTU);
 
 	_online = true;
@@ -158,7 +158,14 @@ void ESPNOWInterface::on_incoming(const Bytes& data) {
 /*static*/ void ESPNOWInterface::on_data_recv(const esp_now_recv_info_t* recv_info, const uint8_t* data, int data_len) {
 	if (!_rx_queue || data_len <= 0 || data_len > ESPNOW_MAX_PAYLOAD) return;
 
+	// Drop packets from our own MAC (prevents broadcast storms)
+	if (recv_info && recv_info->src_addr &&
+	    memcmp(recv_info->src_addr, _local_mac, 6) == 0) {
+		return;
+	}
+
 	rx_packet_t pkt;
+	memcpy(pkt.src_mac, recv_info->src_addr, 6);
 	pkt.len = (uint16_t)data_len;
 	memcpy(pkt.data, data, data_len);
 

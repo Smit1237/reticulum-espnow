@@ -40,7 +40,11 @@ private:
 
 	// RX queue item
 	struct rx_packet_t {
+		uint8_t  src_mac[6];
 		uint8_t  data[ESPNOW_MAX_PAYLOAD];
 		uint16_t len;
 	};
+
+	// Local MAC for filtering own packets
+	static uint8_t _local_mac[6];
 };
