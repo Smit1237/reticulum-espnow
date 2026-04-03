@@ -51,6 +51,12 @@ bool ESPNOWInterface::start() {
 	// Set WiFi channel
 	esp_wifi_set_channel(_channel, WIFI_SECOND_CHAN_NONE);
 
+	// Enable 802.11 LR mode if configured (doubles range, halves throughput)
+#if ESPNOW_LONG_RANGE
+	esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N | WIFI_PROTOCOL_LR);
+	INFO("ESP-NOW: 802.11 LR mode enabled");
+#endif
+
 	// Disable WiFi power saving for lower latency
 	esp_wifi_set_ps(WIFI_PS_NONE);
 

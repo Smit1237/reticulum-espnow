@@ -17,26 +17,42 @@
   #define DualPrintf(...) Serial.printf(__VA_ARGS__)
 #endif
 
-// LED helpers — support both simple GPIO and RGB NeoPixel
+// LED helpers — support GPIO (active high/low) and RGB NeoPixel
+#ifndef LED_ACTIVE_LOW
+  #define LED_ACTIVE_LOW 0
+#endif
+#define LED_ON_STATE  (LED_ACTIVE_LOW ? LOW : HIGH)
+#define LED_OFF_STATE (LED_ACTIVE_LOW ? HIGH : LOW)
+
 inline void led_on() {
 #ifdef LED_RGB_PIN
-	neopixelWrite(LED_RGB_PIN, 2, 2, 2);  // dim white
+	neopixelWrite(LED_RGB_PIN, 2, 2, 2);
 #elif LED_USER_PIN >= 0
-	digitalWrite(LED_USER_PIN, HIGH);
+	digitalWrite(LED_USER_PIN, LED_ON_STATE);
 #endif
 }
 inline void led_off() {
 #ifdef LED_RGB_PIN
 	neopixelWrite(LED_RGB_PIN, 0, 0, 0);
 #elif LED_USER_PIN >= 0
-	digitalWrite(LED_USER_PIN, LOW);
+	digitalWrite(LED_USER_PIN, LED_OFF_STATE);
 #endif
 }
 inline void led_pairing() {
 #ifdef LED_RGB_PIN
-	neopixelWrite(LED_RGB_PIN, 0, 0, 8);  // dim blue
+	neopixelWrite(LED_RGB_PIN, 0, 0, 8);
 #elif LED_USER_PIN >= 0
-	digitalWrite(LED_USER_PIN, HIGH);
+	digitalWrite(LED_USER_PIN, LED_ON_STATE);
+#endif
+}
+inline void led_pwr_off() {
+#if LED_PWR_PIN >= 0
+	digitalWrite(LED_PWR_PIN, LED_OFF_STATE);
+#endif
+}
+inline void led_pwr_on() {
+#if LED_PWR_PIN >= 0
+	digitalWrite(LED_PWR_PIN, LED_ON_STATE);
 #endif
 }
 
@@ -409,6 +425,9 @@ void setup() {
 #if LED_USER_PIN >= 0
 	pinMode(LED_USER_PIN, OUTPUT);
 #endif
+#if LED_PWR_PIN >= 0
+	pinMode(LED_PWR_PIN, OUTPUT);
+#endif
 	led_on();
 	pinMode(BUTTON_BOOT_PIN, INPUT_PULLUP);
 
@@ -417,7 +436,11 @@ void setup() {
 	prefs.begin("rnode", false);
 	bool displayOn = prefs.getBool("disp", true);
 	prefs.end();
-	if (!displayOn) Display::setPowerSave(true);
+	if (!displayOn) {
+		Display::setPowerSave(true);
+		led_off();
+		led_pwr_off();
+	}
 	Display::showBootScreen("RNode", "booting...");
 
 	// Step 1: WiFi + ESP-NOW
@@ -425,6 +448,9 @@ void setup() {
 	WiFi.mode(WIFI_STA);
 	WiFi.disconnect();
 	esp_wifi_set_channel(ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE);
+#if ESPNOW_LONG_RANGE
+	esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N | WIFI_PROTOCOL_LR);
+#endif
 	esp_wifi_set_ps(WIFI_PS_MIN_MODEM);
 
 	if (esp_now_init() == ESP_OK) {
@@ -551,10 +577,17 @@ void loop() {
 		if (!longPressHandled && pressDur < 500) {
 			// Short tap — check for double-tap
 			if (millis() - lastTapAt < 400) {
-				// Double-tap detected — toggle display
+				// Double-tap detected — toggle display + LEDs
 				bool on = !Display::isOn();
 				Serial.printf("Display: %s\r\n", on ? "ON" : "OFF");
 				Display::setPowerSave(!on);
+
+				if (!on) {
+					led_off();
+					led_pwr_off();
+				} else {
+					led_pwr_on();
+				}
 
 				prefs.begin("rnode", false);
 				prefs.putBool("disp", on);
@@ -581,9 +614,9 @@ void loop() {
 		}
 	}
 
-	// Heartbeat (only when not in pairing mode)
+	// Heartbeat (only when not in pairing mode and display is on)
 	static unsigned long lastBlink = 0;
-	if (!pairingMode && millis() - lastBlink > 5000) {
+	if (!pairingMode && Display::isOn() && millis() - lastBlink > 5000) {
 		led_on();
 		delay(50);
 		led_off();

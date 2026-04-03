@@ -258,6 +258,9 @@ void setup() {
 	WiFi.mode(WIFI_STA);
 	WiFi.disconnect();
 	esp_wifi_set_channel(ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE);
+#if ESPNOW_LONG_RANGE
+	esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N | WIFI_PROTOCOL_LR);
+#endif
 	esp_wifi_set_ps(WIFI_PS_NONE);  // No BLE, so full power for ESP-NOW
 
 	if (esp_now_init() == ESP_OK) {

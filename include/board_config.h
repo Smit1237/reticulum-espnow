@@ -18,6 +18,7 @@
 #define OLED_HEIGHT     40
 #define LED_PWR_PIN     4
 #define LED_USER_PIN    8
+#define LED_ACTIVE_LOW  1       // LEDs wired active LOW on this board
 #define BUTTON_BOOT_PIN 9
 #define HAS_PSRAM       0
 #define BOARD_NAME      "ESP32-C3 Node"
@@ -95,7 +96,16 @@
 // ---- Shared config (all boards) ----
 
 // ESP-NOW
-#define ESPNOW_CHANNEL  1       // WiFi channel for ESP-NOW
+#define ESPNOW_CHANNEL  13      // WiFi channel (1-13)
+
+// Long Range mode — Espressif proprietary 802.11 LR PHY
+// Doubles range (~500m LOS) at cost of throughput (512/256 Kbps vs 1 Mbps)
+// Supported on: ESP32, ESP32-S2, ESP32-S3, ESP32-C3, ESP32-C6
+// NOT supported on: ESP32-C2
+// All mesh nodes must use the same setting
+#ifndef ESPNOW_LONG_RANGE
+#define ESPNOW_LONG_RANGE  1    // 1 = LR enabled (default), 0 = standard mode
+#endif
 
 // Transport node re-announce interval (milliseconds)
 // Default 2 hours — matches Python Reticulum behavior

@@ -24,19 +24,35 @@ static Preferences prefs;
 #define NVS_INITIALIZED "init"
 #define NVS_DISPLAY     "disp"
 
-// LED helpers
+// LED helpers — respect active-low boards
+#ifndef LED_ACTIVE_LOW
+  #define LED_ACTIVE_LOW 0
+#endif
+#define LED_ON_STATE  (LED_ACTIVE_LOW ? LOW : HIGH)
+#define LED_OFF_STATE (LED_ACTIVE_LOW ? HIGH : LOW)
+
 inline void led_flash() {
 #ifdef LED_RGB_PIN
 	neopixelWrite(LED_RGB_PIN, 4, 4, 4);
 #elif LED_USER_PIN >= 0
-	digitalWrite(LED_USER_PIN, HIGH);
+	digitalWrite(LED_USER_PIN, LED_ON_STATE);
 #endif
 }
 inline void led_off() {
 #ifdef LED_RGB_PIN
 	neopixelWrite(LED_RGB_PIN, 0, 0, 0);
 #elif LED_USER_PIN >= 0
-	digitalWrite(LED_USER_PIN, LOW);
+	digitalWrite(LED_USER_PIN, LED_OFF_STATE);
+#endif
+}
+inline void led_pwr_off() {
+#if LED_PWR_PIN >= 0
+	digitalWrite(LED_PWR_PIN, LED_OFF_STATE);
+#endif
+}
+inline void led_pwr_on() {
+#if LED_PWR_PIN >= 0
+	digitalWrite(LED_PWR_PIN, LED_ON_STATE);
 #endif
 }
 inline void led_reset() {
@@ -215,6 +231,9 @@ void setup() {
 #if LED_USER_PIN >= 0
 	pinMode(LED_USER_PIN, OUTPUT);
 #endif
+#if LED_PWR_PIN >= 0
+	pinMode(LED_PWR_PIN, OUTPUT);
+#endif
 	led_flash();
 	pinMode(BUTTON_BOOT_PIN, INPUT_PULLUP);
 
@@ -244,7 +263,11 @@ void setup() {
 	prefs.begin(NVS_NAMESPACE, true);
 	bool displayOn = prefs.getBool(NVS_DISPLAY, true);
 	prefs.end();
-	if (!displayOn) Display::setPowerSave(true);
+	if (!displayOn) {
+		Display::setPowerSave(true);
+		led_off();
+		led_pwr_off();
+	}
 	Display::showBootScreen("TRANSPORT", "booting...");
 
 #ifdef DEBUG_BUILD
@@ -294,6 +317,13 @@ void loop() {
 				Serial.printf("Display: %s\r\n", on ? "ON" : "OFF");
 				Display::setPowerSave(!on);
 
+				if (!on) {
+					led_off();
+					led_pwr_off();
+				} else {
+					led_pwr_on();
+				}
+
 				prefs.begin(NVS_NAMESPACE, false);
 				prefs.putBool(NVS_DISPLAY, on);
 				prefs.end();
@@ -313,7 +343,9 @@ void loop() {
 		last_display = millis();
 	}
 
-	// LED: flash on packet activity
+	// LED: flash on packet activity (only when display is on)
+	if (!Display::isOn()) { led_off(); }
+	else {
 	size_t cur_rxb = espnow_interface.rxb();
 	size_t cur_txb = espnow_interface.txb();
 	if (cur_rxb != last_rxb || cur_txb != last_txb) {
@@ -323,6 +355,7 @@ void loop() {
 	} else {
 		led_off();
 	}
+	} // Display::isOn() gate
 }
 
 int _write(int file, char *ptr, int len) {
