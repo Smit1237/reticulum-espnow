@@ -517,26 +517,46 @@ void setup() {
 	updateDisplay();
 }
 
-// =============== LOOP ===============
+// =============== LOOP (event-driven) ===============
+//
+// Instead of polling in a tight loop, we block on the ESP-NOW RX queue
+// with a short timeout. This gives zero CPU usage while waiting, with
+// instant wake when mesh data arrives. The timeout handles periodic
+// housekeeping (display, buttons, BLE data, LED).
+
+// Housekeeping interval — how often we check buttons, display, BLE RX
+// when no ESP-NOW data is arriving. Lower = more responsive buttons
+// but slightly more CPU. 50ms = 20Hz housekeeping.
+#define HOUSEKEEPING_MS 50
 
 void loop() {
-	// BLE RX -> KISS parser -> ESP-NOW
+	// --- Event wait: block until ESP-NOW packet or timeout ---
+	espnow_rx_pkt_t pkt;
+	bool gotPacket = (xQueueReceive(espnow_rx_queue, &pkt, pdMS_TO_TICKS(HOUSEKEEPING_MS)) == pdTRUE);
+
+	// --- Process ESP-NOW data (instant wake path) ---
+	if (gotPacket) {
+		rx_count++;
+		if (bleConnected) {
+			kiss_send_data(pkt.data, pkt.len);
+		}
+		// Drain any additional queued packets
+		while (xQueueReceive(espnow_rx_queue, &pkt, 0) == pdTRUE) {
+			rx_count++;
+			if (bleConnected) {
+				kiss_send_data(pkt.data, pkt.len);
+			}
+		}
+	}
+
+	// --- Process BLE RX data (checked every housekeeping cycle) ---
 	while (bleRxHead != bleRxTail) {
 		uint8_t b = bleRxBuf[bleRxTail];
 		bleRxTail = (bleRxTail + 1) % BLE_RX_BUF_SIZE;
 		kiss_feed(b);
 	}
 
-	// ESP-NOW RX -> KISS DATA frame -> BLE TX
-	espnow_rx_pkt_t pkt;
-	while (xQueueReceive(espnow_rx_queue, &pkt, 0) == pdTRUE) {
-		rx_count++;
-		if (bleConnected) {
-			kiss_send_data(pkt.data, pkt.len);
-		}
-	}
-
-	// BOOT button: double-tap = toggle display, long press (2s) = pairing mode
+	// --- Button handling ---
 	static unsigned long btnDownAt = 0;
 	static unsigned long lastTapAt = 0;
 	static bool btnDown = false;
@@ -545,14 +565,12 @@ void loop() {
 	bool pressed = (digitalRead(BUTTON_BOOT_PIN) == LOW);
 
 	if (pressed && !btnDown) {
-		// Button just pressed
 		btnDown = true;
 		btnDownAt = millis();
 		longPressHandled = false;
 	}
 
 	if (pressed && btnDown && !longPressHandled && millis() - btnDownAt > 2000) {
-		// Long press — pairing mode
 		longPressHandled = true;
 		Serial.println("BOOT: entering pairing mode");
 		pairingMode = true;
@@ -564,7 +582,6 @@ void loop() {
 		Serial.println("BOOT: bonds cleared, advertising for new pairing");
 		NimBLEDevice::startAdvertising();
 
-		// Turn display on for pairing
 		if (!Display::isOn()) {
 			Display::setPowerSave(false);
 		}
@@ -574,18 +591,15 @@ void loop() {
 			if (i % 2) led_pairing(); else led_off();
 			delay(100);
 		}
-		led_pairing();  // Stay blue during pairing
+		led_pairing();
 	}
 
 	if (!pressed && btnDown) {
-		// Button released
 		btnDown = false;
 		unsigned long pressDur = millis() - btnDownAt;
 
 		if (!longPressHandled && pressDur < 500) {
-			// Short tap — check for double-tap
 			if (millis() - lastTapAt < 400) {
-				// Double-tap detected — toggle display + LEDs
 				bool on = !Display::isOn();
 				Serial.printf("Display: %s\r\n", on ? "ON" : "OFF");
 				Display::setPowerSave(!on);
@@ -609,11 +623,10 @@ void loop() {
 		}
 	}
 
-	// Display update
+	// --- Periodic housekeeping (runs at HOUSEKEEPING_MS intervals) ---
 	static unsigned long lastDisp = 0;
 	if (millis() - lastDisp > 2000) { updateDisplay(); lastDisp = millis(); }
 
-	// Repeat pairing PIN on serial every 10s (critical for screenless boards)
 	if (showingPin && pairingPin > 0) {
 		static unsigned long lastPinPrint = 0;
 		if (millis() - lastPinPrint > 10000) {
@@ -622,16 +635,17 @@ void loop() {
 		}
 	}
 
-	// Heartbeat (only when not in pairing mode and display is on)
-	static unsigned long lastBlink = 0;
-	if (!pairingMode && Display::isOn() && millis() - lastBlink > 5000) {
-		led_on();
-		delay(50);
-		led_off();
-		lastBlink = millis();
+	// --- LED management ---
+	if (!pairingMode && Display::isOn()) {
+		static unsigned long lastBlink = 0;
+		if (millis() - lastBlink > 5000) {
+			led_on();
+			delay(50);
+			led_off();
+			lastBlink = millis();
+		}
 	}
 
-	// Steady dim blue LED while in pairing mode
 	if (pairingMode && !bleConnected) {
 		static unsigned long lastPairBlink = 0;
 		if (millis() - lastPairBlink > 1000) {
@@ -641,6 +655,4 @@ void loop() {
 			lastPairBlink = millis();
 		}
 	}
-
-	delay(1); // Let RTOS run idle task — prevents 100% CPU and overheating
 }
