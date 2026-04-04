@@ -82,8 +82,8 @@ inline void led_pwr_on() {
 
 #define DETECT_REQ      0x73
 #define DETECT_RESP     0x46
-#define PLATFORM_ESP32  0x80
-#define MCU_ESP32       0x81
+#define KISS_PLATFORM_ESP32  0x80
+#define KISS_MCU_ESP32       0x81
 #define FW_MAJ          0x01
 #define FW_MIN          0x3C  // 1.60
 
@@ -125,8 +125,8 @@ struct espnow_rx_pkt_t {
 };
 static QueueHandle_t espnow_rx_queue = nullptr;
 
-static volatile uint32_t tx_count = 0;
-static volatile uint32_t rx_count = 0;
+static uint32_t tx_count = 0;
+static uint32_t rx_count = 0;
 
 // KISS parser state
 static uint8_t  kiss_buf[ESPNOW_MAX_PAYLOAD];
@@ -301,11 +301,11 @@ void handle_kiss_frame() {
 		break;
 
 	case CMD_PLATFORM:
-		kiss_respond1(CMD_PLATFORM, PLATFORM_ESP32);
+		kiss_respond1(CMD_PLATFORM, KISS_PLATFORM_ESP32);
 		break;
 
 	case CMD_MCU:
-		kiss_respond1(CMD_MCU, MCU_ESP32);
+		kiss_respond1(CMD_MCU, KISS_MCU_ESP32);
 		break;
 
 	case CMD_BOARD:
@@ -499,7 +499,7 @@ void setup() {
 	NimBLECharacteristic* pRxChar = pSvc->createCharacteristic(
 		NUS_RX_UUID, NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::WRITE_NR);
 	pRxChar->setCallbacks(&rxCB);
-	pSvc->start();
+	// NimBLE 2.x: services auto-start with server, pSvc->start() is no-op
 
 	NimBLEAdvertising* pAdv = NimBLEDevice::getAdvertising();
 	pAdv->setName(bleName);

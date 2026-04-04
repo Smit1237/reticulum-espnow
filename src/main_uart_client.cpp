@@ -32,8 +32,8 @@
 
 #define DETECT_REQ      0x73
 #define DETECT_RESP     0x46
-#define PLATFORM_ESP32  0x80
-#define MCU_ESP32       0x81
+#define KISS_PLATFORM_ESP32  0x80
+#define KISS_MCU_ESP32       0x81
 #define FW_MAJ          0x01
 #define FW_MIN          0x3C  // 1.60
 
@@ -143,11 +143,11 @@ void handle_kiss_frame() {
 		break;
 
 	case CMD_PLATFORM:
-		kiss_respond1(CMD_PLATFORM, PLATFORM_ESP32);
+		kiss_respond1(CMD_PLATFORM, KISS_PLATFORM_ESP32);
 		break;
 
 	case CMD_MCU:
-		kiss_respond1(CMD_MCU, MCU_ESP32);
+		kiss_respond1(CMD_MCU, KISS_MCU_ESP32);
 		break;
 
 	case CMD_BOARD:

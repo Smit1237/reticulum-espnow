@@ -184,7 +184,7 @@ void ESPNOWInterface::on_incoming(const Bytes& data) {
 
 	// Non-blocking queue send — track drops if queue is full
 	if (xQueueSendFromISR(_rx_queue, &pkt, nullptr) != pdTRUE) {
-		_rx_drops++;
+		_rx_drops = _rx_drops + 1;  // Avoid deprecated volatile++ in C++20
 	}
 
 	// Notify any task blocking on waitForData()
