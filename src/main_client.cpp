@@ -641,4 +641,6 @@ void loop() {
 			lastPairBlink = millis();
 		}
 	}
+
+	delay(1); // Let RTOS run idle task — prevents 100% CPU and overheating
 }

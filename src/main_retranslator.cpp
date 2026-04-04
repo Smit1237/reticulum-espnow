@@ -367,6 +367,8 @@ void loop() {
 		led_off();
 	}
 	} // Display::isOn() gate
+
+	delay(1); // Let RTOS run idle task — prevents 100% CPU and overheating
 }
 
 int _write(int file, char *ptr, int len) {

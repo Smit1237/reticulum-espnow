@@ -333,4 +333,6 @@ void loop() {
 	// Display update
 	static unsigned long lastDisp = 0;
 	if (millis() - lastDisp > 2000) { updateDisplay(); lastDisp = millis(); }
+
+	delay(1); // Let RTOS run idle task — prevents 100% CPU and overheating
 }

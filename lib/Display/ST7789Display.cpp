@@ -50,18 +50,20 @@ void showStatus(bool connected, const char* name,
                 unsigned long tx, unsigned long rx, float tempC) {
 	if (!_displayOn) return;
 
-	tft.fillScreen(BG_COLOR);
-
+	// Use text background color to overwrite old text (no full screen clear = no flicker)
 	// Row 1: connection indicator + name
 	if (connected)
 		tft.fillCircle(12, 16, 8, CONN_COLOR);
-	else
+	else {
+		tft.fillCircle(12, 16, 8, BG_COLOR);
 		tft.drawCircle(12, 16, 8, DISCONN_COLOR);
+	}
 
 	tft.setTextFont(4);
 	tft.setTextColor(TEXT_COLOR, BG_COLOR);
 	tft.setCursor(28, 4);
 	tft.print(name);
+	tft.print("        "); // clear trailing chars
 
 	// Stats area
 	tft.setTextFont(2);
@@ -70,24 +72,21 @@ void showStatus(bool connected, const char* name,
 	tft.setCursor(4, 42);
 	tft.print("TX: ");
 	tft.setTextColor(TEXT_COLOR, BG_COLOR);
-	tft.print(tx);
+	char buf[16];
+	snprintf(buf, sizeof(buf), "%-10lu", tx);
+	tft.print(buf);
 
 	tft.setTextColor(LABEL_COLOR, BG_COLOR);
 	tft.setCursor(4, 64);
 	tft.print("RX: ");
 	tft.setTextColor(TEXT_COLOR, BG_COLOR);
-	tft.print(rx);
+	snprintf(buf, sizeof(buf), "%-10lu", rx);
+	tft.print(buf);
 
 	tft.setTextColor(LABEL_COLOR, BG_COLOR);
 	tft.setCursor(4, 86);
-	char tbuf[10];
-	snprintf(tbuf, sizeof(tbuf), "%.1f C", tempC);
-	tft.print(tbuf);
-
-	// BLE status on right side
-	tft.setTextColor(connected ? CONN_COLOR : DISCONN_COLOR, BG_COLOR);
-	tft.setCursor(140, 42);
-	tft.print(connected ? "BLE OK" : "BLE --");
+	snprintf(buf, sizeof(buf), "%.1f C    ", tempC);
+	tft.print(buf);
 }
 
 void showPairingMode(const char* name) {
