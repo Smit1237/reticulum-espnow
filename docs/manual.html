@@ -37,6 +37,9 @@ nav a { color: var(--accent); text-decoration: none; display: block; padding: 3p
 nav a:hover { text-decoration: underline; }
 footer { text-align: center; color: var(--dim); padding: 30px 0; font-size: 0.8em; border-top: 1px solid var(--border); margin-top: 40px; }
 @media print { body { background: #fff; color: #000; } header { position: static; } .lang-switch { display: none; } th { background: #eee; } pre, code { background: #f5f5f5; } }
+.back-top { position: fixed; bottom: 20px; right: 20px; background: var(--accent); color: var(--bg); width: 40px; height: 40px; border-radius: 50%; text-align: center; line-height: 40px; font-size: 1.4em; text-decoration: none; opacity: 0; transition: opacity 0.3s; z-index: 200; box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+.back-top.visible { opacity: 0.8; }
+.back-top:hover { opacity: 1; }
 @media (max-width: 600px) { .screens { flex-direction: column; align-items: center; } table { font-size: 0.8em; } }
 </style>
 </head>
@@ -584,6 +587,8 @@ pio run -e client_c3 -t upload --upload-port COM24</code></pre>
 
 </div>
 
+<a href="#" class="back-top" id="back-top" title="Back to top">^</a>
+
 <footer>
 Reticulum ESP-NOW Mesh Firmware -- Technical Documentation
 </footer>
@@ -595,6 +600,11 @@ function setLang(lang) {
   document.getElementById('btn-en').classList.toggle('active', lang === 'en');
   document.getElementById('btn-ru').classList.toggle('active', lang === 'ru');
 }
+window.addEventListener('scroll', function() {
+  var btn = document.getElementById('back-top');
+  if (window.scrollY > 300) { btn.classList.add('visible'); }
+  else { btn.classList.remove('visible'); }
+});
 </script>
 
 </body>
