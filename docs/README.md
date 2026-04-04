@@ -28,6 +28,8 @@ All nodes communicate over ESP-NOW v2.0 with 802.11 Long Range mode, achieving u
 | LilyGO T-Display | ESP32 | ST7789 135x240 | 4.2 | Yes | Yes | Yes |
 | ESP32-S3 DevKitC | ESP32-S3 | None | 5.0 | Yes | Yes | Yes |
 | ESP32 DevKit | ESP32 | None | 4.2 | Yes | Yes | Yes |
+| ESP32-WROVER DevKit | ESP32 | None | 4.2 | Yes | Yes (4MB PSRAM) | Yes |
+| ESP32-CAM | ESP32 | None | 4.2 | Yes | No | No |
 | ESP32-C6 DevKitC | ESP32-C6 | None | 5.0 | Yes | Yes | Yes |
 | ESP32-S2 Saola | ESP32-S2 | None | No | No | Yes | Yes |
 
@@ -360,6 +362,9 @@ If power is lost during first boot, the device will boot normally on the next at
 | retranslator_s3_r2 | ESP32-S3 | None | 1024 | 2MB quad PSRAM |
 | retranslator_s3_r8 | ESP32-S3 | None | 4096 | 8MB octal PSRAM |
 | retranslator_esp32 | ESP32 | None | 128 | Classic ESP32 |
+| retranslator_esp32_debug | ESP32 | None | 128 | Verbose logging |
+| retranslator_wrover | ESP32-WROVER | None | 4096 | 4MB quad PSRAM |
+| retranslator_wrover_debug | ESP32-WROVER | None | 4096 | Verbose logging |
 | retranslator_c6 | ESP32-C6 | None | 48 | WiFi 6 |
 | retranslator_s2 | ESP32-S2 | None | 48 | No BLE, relay only |
 

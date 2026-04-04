@@ -28,6 +28,8 @@
 | LilyGO T-Display | ESP32 | ST7789 135x240 | 4.2 | Да | Да | Да |
 | ESP32-S3 DevKitC | ESP32-S3 | Нет | 5.0 | Да | Да | Да |
 | ESP32 DevKit | ESP32 | Нет | 4.2 | Да | Да | Да |
+| ESP32-WROVER DevKit | ESP32 | Нет | 4.2 | Да | Да (4 МБ PSRAM) | Да |
+| ESP32-CAM | ESP32 | Нет | 4.2 | Да | Нет | Нет |
 | ESP32-C6 DevKitC | ESP32-C6 | Нет | 5.0 | Да | Да | Да |
 | ESP32-S2 Saola | ESP32-S2 | Нет | Нет | Нет | Да | Да |
 
@@ -360,6 +362,9 @@ RX: 4521
 | retranslator_s3_r2 | ESP32-S3 | Нет | 1024 | 2 МБ quad PSRAM |
 | retranslator_s3_r8 | ESP32-S3 | Нет | 4096 | 8 МБ octal PSRAM |
 | retranslator_esp32 | ESP32 | Нет | 128 | Классический ESP32 |
+| retranslator_esp32_debug | ESP32 | Нет | 128 | Подробное логирование |
+| retranslator_wrover | ESP32-WROVER | Нет | 4096 | 4 МБ quad PSRAM |
+| retranslator_wrover_debug | ESP32-WROVER | Нет | 4096 | Подробное логирование |
 | retranslator_c6 | ESP32-C6 | Нет | 48 | WiFi 6 |
 | retranslator_s2 | ESP32-S2 | Нет | 48 | Без BLE, только ретрансляция |
 
