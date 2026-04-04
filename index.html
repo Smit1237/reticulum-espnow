@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reticulum ESP-NOW Firmware Flasher</title>
+<style>
+:root { --bg: #1a1a2e; --fg: #e0e0e0; --accent: #00d4ff; --card: #16213e; --border: #0f3460; --ok: #00ff88; --err: #ff4444; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--fg); padding: 20px; min-height: 100vh; }
+.container { max-width: 640px; margin: 0 auto; }
+h1 { color: var(--accent); margin-bottom: 8px; font-size: 1.5em; }
+.subtitle { color: #888; margin-bottom: 24px; font-size: 0.9em; }
+.step { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+.step h2 { color: var(--accent); font-size: 1.1em; margin-bottom: 10px; }
+.step-num { display: inline-block; background: var(--accent); color: var(--bg); width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 24px; font-weight: bold; font-size: 0.85em; margin-right: 8px; }
+button { padding: 10px 20px; border: 1px solid var(--border); background: var(--card); color: var(--fg); cursor: pointer; border-radius: 6px; font-size: 1em; transition: all 0.2s; }
+button:hover { background: var(--accent); color: var(--bg); }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button.primary { background: var(--accent); color: var(--bg); font-weight: bold; }
+button.primary:hover { background: #00b8d9; }
+input[type="file"] { display: none; }
+.file-label { display: inline-block; padding: 10px 20px; border: 1px dashed var(--border); border-radius: 6px; cursor: pointer; transition: all 0.2s; }
+.file-label:hover { border-color: var(--accent); color: var(--accent); }
+.file-name { margin-top: 8px; color: var(--ok); font-family: monospace; font-size: 0.9em; }
+#log { background: #0d1117; border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-family: 'Consolas', monospace; font-size: 0.8em; max-height: 300px; overflow-y: auto; white-space: pre-wrap; margin-top: 12px; display: none; }
+.progress-bar { width: 100%; height: 24px; background: var(--border); border-radius: 12px; overflow: hidden; margin-top: 12px; display: none; }
+.progress-fill { height: 100%; background: var(--accent); transition: width 0.3s; border-radius: 12px; }
+.progress-text { text-align: center; margin-top: 4px; font-size: 0.85em; color: #888; }
+.chip-info { padding: 8px 12px; background: rgba(0,212,255,0.1); border-left: 3px solid var(--accent); border-radius: 0 4px 4px 0; margin-top: 10px; font-size: 0.9em; }
+.status { margin-top: 10px; font-weight: bold; }
+.status.ok { color: var(--ok); }
+.status.err { color: var(--err); }
+.warn { color: #ffcc00; font-size: 0.85em; margin-top: 12px; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Reticulum ESP-NOW Firmware Flasher</h1>
+<p class="subtitle">Flash firmware to ESP32 boards via USB from your browser (Chrome/Edge only)</p>
+
+<div class="step">
+<h2><span class="step-num">1</span> Connect Board</h2>
+<p>Plug your ESP32 board into USB. Some boards require holding BOOT while pressing RESET to enter download mode.</p>
+<button id="btn-connect" onclick="connectDevice()">Connect</button>
+<div id="chip-info" class="chip-info" style="display:none"></div>
+</div>
+
+<div class="step">
+<h2><span class="step-num">2</span> Select Firmware</h2>
+<p>Choose the .bin firmware file for your board.</p>
+<label class="file-label" for="file-input">Choose .bin file</label>
+<input type="file" id="file-input" accept=".bin" onchange="fileSelected(this)">
+<div id="file-name" class="file-name"></div>
+</div>
+
+<div class="step">
+<h2><span class="step-num">3</span> Flash</h2>
+<button id="btn-flash" class="primary" onclick="flashFirmware()" disabled>Flash Firmware</button>
+<div class="progress-bar" id="progress-bar">
+<div class="progress-fill" id="progress-fill" style="width:0%"></div>
+</div>
+<div class="progress-text" id="progress-text"></div>
+<div id="status" class="status"></div>
+</div>
+
+<div class="step">
+<h2>Log</h2>
+<button onclick="toggleLog()">Show/Hide Log</button>
+<div id="log"></div>
+</div>
+
+<p class="warn">Web Serial API is required. Supported browsers: Chrome 89+, Edge 89+, Opera 76+. Firefox and Safari are NOT supported.</p>
+
+</div>
+
+<script type="module">
+import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.5.7/bundle.js';
+
+let esploader = null;
+let transport = null;
+let firmwareData = null;
+let chipFamily = null;
+
+const logEl = document.getElementById('log');
+const statusEl = document.getElementById('status');
+
+function log(msg) {
+    logEl.style.display = 'block';
+    logEl.textContent += msg + '\n';
+    logEl.scrollTop = logEl.scrollHeight;
+    console.log(msg);
+}
+
+function toggleLog() {
+    logEl.style.display = logEl.style.display === 'none' ? 'block' : 'none';
+}
+
+function setStatus(msg, type) {
+    statusEl.textContent = msg;
+    statusEl.className = 'status ' + (type || '');
+}
+
+// Determine flash offset based on chip
+function getAppOffset(chip) {
+    // ESP32 classic: bootloader at 0x1000, app at 0x10000
+    // ESP32-S2/S3/C3/C6: bootloader at 0x0, app at 0x10000
+    return 0x10000; // App always at 0x10000
+}
+
+async function connectDevice() {
+    if (!('serial' in navigator)) {
+        alert('Web Serial API not supported. Use Chrome or Edge.');
+        return;
+    }
+
+    try {
+        const port = await navigator.serial.requestPort();
+        transport = new Transport(port, true);
+
+        const terminal = {
+            clean() {},
+            writeLine(data) { log(data); },
+            write(data) { log(data); }
+        };
+
+        esploader = new ESPLoader({
+            transport: transport,
+            baudrate: 115200,
+            terminal: terminal
+        });
+
+        log('Connecting...');
+        const chip = await esploader.main();
+        chipFamily = chip;
+
+        document.getElementById('chip-info').style.display = 'block';
+        document.getElementById('chip-info').textContent = 'Detected: ' + chip;
+        document.getElementById('btn-connect').textContent = 'Connected';
+        document.getElementById('btn-connect').disabled = true;
+
+        log('Chip detected: ' + chip);
+        updateFlashButton();
+    } catch (e) {
+        log('Connection failed: ' + e.message);
+        setStatus('Connection failed: ' + e.message, 'err');
+    }
+}
+
+function fileSelected(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    document.getElementById('file-name').textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        firmwareData = e.target.result;
+        log('Firmware loaded: ' + file.name + ' (' + firmwareData.byteLength + ' bytes)');
+        updateFlashButton();
+    };
+    reader.readAsBinaryString(file);
+}
+
+function updateFlashButton() {
+    document.getElementById('btn-flash').disabled = !(esploader && firmwareData);
+}
+
+// Expose functions to onclick handlers (module scope)
+window.connectDevice = connectDevice;
+window.flashFirmware = flashFirmware;
+window.fileSelected = fileSelected;
+window.toggleLog = toggleLog;
+
+async function flashFirmware() {
+    if (!esploader || !firmwareData) return;
+
+    const btn = document.getElementById('btn-flash');
+    btn.disabled = true;
+    btn.textContent = 'Flashing...';
+
+    const progressBar = document.getElementById('progress-bar');
+    const progressFill = document.getElementById('progress-fill');
+    const progressText = document.getElementById('progress-text');
+    progressBar.style.display = 'block';
+
+    try {
+        const offset = getAppOffset(chipFamily);
+        log('Flashing at offset 0x' + offset.toString(16) + '...');
+
+        const flashOptions = {
+            fileArray: [
+                { data: firmwareData, address: offset }
+            ],
+            flashSize: 'keep',
+            eraseAll: false,
+            compress: true,
+            reportProgress: function(fileIndex, written, total) {
+                const pct = Math.round(written / total * 100);
+                progressFill.style.width = pct + '%';
+                progressText.textContent = pct + '% (' + written + ' / ' + total + ' bytes)';
+            }
+        };
+
+        await esploader.writeFlash(flashOptions);
+        log('Flash complete!');
+        setStatus('Flash successful!', 'ok');
+
+        log('Resetting device...');
+        await esploader.after('hard_reset');
+        log('Device reset. Done.');
+
+    } catch (e) {
+        log('Flash failed: ' + e.message);
+        setStatus('Flash failed: ' + e.message, 'err');
+    }
+
+    btn.textContent = 'Flash Firmware';
+    btn.disabled = false;
+}
+</script>
+
+</body>
+</html>
