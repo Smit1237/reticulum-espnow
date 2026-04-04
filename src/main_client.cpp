@@ -106,6 +106,8 @@ static Preferences prefs;
 static NimBLEServer*         pServer = nullptr;
 static NimBLECharacteristic* pTxChar = nullptr;
 static volatile bool bleConnected = false;
+static uint16_t bleMTU = 20;         // Negotiated MTU (updated in callback)
+static uint16_t bleConnHandle = 0;   // Connection handle for param updates
 
 // BLE RX ring buffer
 #define BLE_RX_BUF_SIZE 2048
@@ -144,20 +146,25 @@ void updateDisplay();
 class ServerCB : public NimBLEServerCallbacks {
 	void onConnect(NimBLEServer* s, NimBLEConnInfo& ci) override {
 		bleConnected = true;
-		Serial.printf("BLE: CONNECTED [%s] handle=%d\r\n", ci.getAddress().toString().c_str(), ci.getConnHandle());
+		bleConnHandle = ci.getConnHandle();
+		Serial.printf("BLE: CONNECTED [%s] handle=%d\r\n", ci.getAddress().toString().c_str(), bleConnHandle);
+		// Connection parameter and PHY updates deferred to onAuthenticationComplete
+		// to avoid disrupting the pairing handshake
 	}
 	void onDisconnect(NimBLEServer* s, NimBLEConnInfo& ci, int reason) override {
 		bleConnected = false;
 		showingPin = false;
+		bleMTU = 20;  // Reset to default
 		Serial.printf("BLE: DISCONNECTED (reason=%d)\r\n", reason);
 		NimBLEDevice::startAdvertising();
 		Serial.println("BLE: re-advertising");
 		updateDisplay();
 	}
 	void onMTUChange(uint16_t MTU, NimBLEConnInfo& ci) override {
+		bleMTU = MTU;
 		static uint16_t lastMTU = 0;
 		if (MTU != lastMTU) {
-			Serial.printf("BLE: MTU %u\r\n", MTU);
+			Serial.printf("BLE: MTU %u (max notify payload: %u)\r\n", MTU, MTU - 3);
 			lastMTU = MTU;
 		}
 	}
@@ -180,6 +187,23 @@ class ServerCB : public NimBLEServerCallbacks {
 		if (!ci.isEncrypted()) {
 			Serial.println("BLE: pairing FAILED, disconnecting");
 			NimBLEDevice::getServer()->disconnect(ci.getConnHandle());
+		} else {
+			// Auth succeeded — now safe to optimize connection parameters
+			NimBLEServer* s = NimBLEDevice::getServer();
+
+			// Request fast connection interval for throughput
+			// min=7.5ms, max=15ms, latency=0, timeout=200ms (in 1.25ms units)
+			s->updateConnParams(bleConnHandle, 6, 12, 0, 200);
+
+			// Request 2M PHY on BLE 5.0 chips (C3, S3, C6)
+#if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32S3) || \
+    defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32H2)
+			uint8_t phyMask = BLE_GAP_LE_PHY_1M_MASK | BLE_GAP_LE_PHY_2M_MASK;
+			s->updatePhy(bleConnHandle, phyMask, phyMask, 0);
+			Serial.println("BLE: requested fast params + 2M PHY");
+#else
+			Serial.println("BLE: requested fast params");
+#endif
 		}
 		updateDisplay();
 	}
@@ -223,11 +247,40 @@ static void espnow_send_cb(const wifi_tx_info_t* ti, esp_now_send_status_t st) {
 
 // =============== BLE TX helpers ===============
 
-// Send raw bytes to BLE (KISS frame already built)
+// Send raw bytes to BLE with MTU-aware fragmentation.
+// BLE notifications cannot exceed (MTU - 3) bytes. If the payload is
+// larger, we split it into chunks. Each notify() is retried briefly
+// on ENOMEM (NimBLE TX buffers full).
 void ble_send(const uint8_t* data, size_t len) {
 	if (!bleConnected || !pTxChar) return;
-	pTxChar->setValue(data, len);
-	pTxChar->notify();
+
+	uint16_t maxChunk = (bleMTU >= 23) ? (bleMTU - 3) : 20;
+	size_t offset = 0;
+
+	while (offset < len && bleConnected) {
+		size_t chunk = len - offset;
+		if (chunk > maxChunk) chunk = maxChunk;
+
+		pTxChar->setValue(data + offset, chunk);
+
+		// Retry notify() up to 10 times on failure (BLE TX buffers full)
+		bool sent = false;
+		for (int retry = 0; retry < 10; retry++) {
+			if (pTxChar->notify()) {
+				sent = true;
+				break;
+			}
+			// BLE TX buffers full — brief delay to let controller drain
+			delay(2);
+		}
+
+		if (!sent) {
+			Serial.println("BLE TX: notify failed, dropping remainder");
+			break;
+		}
+
+		offset += chunk;
+	}
 }
 
 // Build and send a simple KISS response: FEND CMD [bytes...] FEND
@@ -483,7 +536,7 @@ void setup() {
 	snprintf(bleName, sizeof(bleName), "RNode %02X%02X", mac[4], mac[5]);
 
 	NimBLEDevice::init(bleName);
-	NimBLEDevice::setMTU(512);
+	NimBLEDevice::setMTU(517);  // Max ATT_MTU for 512-byte payloads + 3-byte ATT header + 2
 
 	// Enable bonding with passkey display — PIN shown on OLED during pairing
 	NimBLEDevice::setSecurityAuth(true, true, true);  // bonding, MITM protection, secure connections
