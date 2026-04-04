@@ -1,8 +1,6 @@
 #include <Arduino.h>
 #include "board_config.h"
 #include "Display.h"
-#include "CpuMonitor.h"
-
 #include <NimBLEDevice.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
@@ -414,10 +412,7 @@ void updateDisplay() {
 			last_temp = temperatureRead();
 			last_temp_read = millis();
 		}
-		CpuMonitor::sample();
-		Display::showStatus(bleConnected, bleName, tx_count, rx_count, last_temp,
-		                    CpuMonitor::load(0),
-		                    CpuMonitor::numCores() > 1 ? CpuMonitor::load(1) : -1);
+		Display::showStatus(bleConnected, bleName, tx_count, rx_count, last_temp);
 	}
 }
 
@@ -516,8 +511,6 @@ void setup() {
 	DualPrintf("BLE: '%s' addr %s\r\n", bleName,
 	           NimBLEDevice::getAddress().toString().c_str());
 	DualPrintf("Bridge ready.\r\n");
-
-	CpuMonitor::begin();
 
 	led_off();
 	updateDisplay();

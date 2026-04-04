@@ -49,8 +49,7 @@ void showBootScreen(const char* name, const char* subtitle) {
 }
 
 void showStatus(bool connected, const char* name,
-                unsigned long tx, unsigned long rx, float tempC,
-                float cpu0, float cpu1) {
+                unsigned long tx, unsigned long rx, float tempC) {
 	if (!_displayOn) return;
 
 	// One-shot clear after boot/pairing screen to wipe leftover content
@@ -76,7 +75,7 @@ void showStatus(bool connected, const char* name,
 
 	// Stats area
 	tft.setTextFont(2);
-	char buf[32];
+	char buf[16];
 
 	tft.setTextColor(LABEL_COLOR, BG_COLOR);
 	tft.setCursor(4, 42);
@@ -92,46 +91,10 @@ void showStatus(bool connected, const char* name,
 	snprintf(buf, sizeof(buf), "%-10lu", rx);
 	tft.print(buf);
 
-	// Row 4: temperature + CPU load on the right
 	tft.setTextColor(LABEL_COLOR, BG_COLOR);
 	tft.setCursor(4, 86);
 	snprintf(buf, sizeof(buf), "%.1f C    ", tempC);
 	tft.print(buf);
-
-	// Row 5: CPU load per core (if provided)
-	if (cpu0 >= 0) {
-		tft.setCursor(4, 108);
-
-		if (cpu1 >= 0) {
-			// Dual core: "CPU: XX% / YY%"  (fixed width, color per value)
-			uint16_t c0color = (cpu0 > 80) ? TFT_RED : (cpu0 > 50) ? TFT_YELLOW : TFT_GREEN;
-			uint16_t c1color = (cpu1 > 80) ? TFT_RED : (cpu1 > 50) ? TFT_YELLOW : TFT_GREEN;
-
-			tft.setTextColor(LABEL_COLOR, BG_COLOR);
-			tft.print("CPU:");
-			tft.setTextColor(c0color, BG_COLOR);
-			snprintf(buf, sizeof(buf), "%3.0f", cpu0);
-			tft.print(buf);
-			tft.setTextColor(LABEL_COLOR, BG_COLOR);
-			tft.print("/");
-			tft.setTextColor(c1color, BG_COLOR);
-			snprintf(buf, sizeof(buf), "%3.0f", cpu1);
-			tft.print(buf);
-			tft.setTextColor(LABEL_COLOR, BG_COLOR);
-			tft.print("%     ");
-		} else {
-			// Single core: "CPU: XX%"
-			uint16_t c0color = (cpu0 > 80) ? TFT_RED : (cpu0 > 50) ? TFT_YELLOW : TFT_GREEN;
-
-			tft.setTextColor(LABEL_COLOR, BG_COLOR);
-			tft.print("CPU:");
-			tft.setTextColor(c0color, BG_COLOR);
-			snprintf(buf, sizeof(buf), "%3.0f", cpu0);
-			tft.print(buf);
-			tft.setTextColor(LABEL_COLOR, BG_COLOR);
-			tft.print("%          ");
-		}
-	}
 }
 
 void showPairingMode(const char* name) {

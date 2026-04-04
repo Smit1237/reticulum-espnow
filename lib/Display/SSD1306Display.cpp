@@ -48,11 +48,10 @@ void showBootScreen(const char* name, const char* subtitle) {
 }
 
 void showStatus(bool connected, const char* name,
-                unsigned long tx, unsigned long rx, float tempC,
-                float cpu0, float cpu1) {
+                unsigned long tx, unsigned long rx, float tempC) {
 	if (!_displayOn) return;
 
-	char buf[24];
+	char buf[20];
 	u8g2.clearBuffer();
 
 	// Row 1: icon + name
@@ -72,14 +71,8 @@ void showStatus(bool connected, const char* name,
 	snprintf(buf, sizeof(buf), "RX: %lu", rx);
 	u8g2.drawStr(0, 27, buf);
 
-	// Row 4: temp + CPU load
-	if (cpu0 >= 0 && cpu1 >= 0) {
-		snprintf(buf, sizeof(buf), "%.0fC %0.0f/%0.0f%%", tempC, cpu0, cpu1);
-	} else if (cpu0 >= 0) {
-		snprintf(buf, sizeof(buf), "%.0fC CPU:%0.0f%%", tempC, cpu0);
-	} else {
-		snprintf(buf, sizeof(buf), "%.1f C", tempC);
-	}
+	// Row 4: temperature
+	snprintf(buf, sizeof(buf), "%.1f C", tempC);
 	u8g2.drawStr(0, 37, buf);
 
 	u8g2.sendBuffer();
