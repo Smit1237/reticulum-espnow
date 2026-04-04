@@ -174,9 +174,12 @@ jobs:
           sha256sum *.bin > SHA256SUMS.txt
           cd ../..
 
-          # Copy latest flasher from source
+          # Copy latest flasher from source (flasher/ version has ../docs path)
           cp ../source/flasher/index.html flasher/index.html
+
+          # Root index.html: same flasher but fix docs link for root path
           cp flasher/index.html index.html
+          sed -i 's|../docs/manual.html|docs/manual.html|g' index.html
 
           # Copy HTML manual from source
           mkdir -p docs

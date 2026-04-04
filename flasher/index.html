@@ -96,7 +96,7 @@ input[type="file"] { display: none; }
 <p class="warn">Web Serial API required. Supported: Chrome 89+, Edge 89+, Opera 76+. NOT supported: Firefox, Safari, iOS.</p>
 
 <p style="text-align:center; margin-top:16px; font-size:0.9em;">
-<a href="docs/manual.html" style="color:var(--accent)">Documentation / Manual</a> |
+<a href="../docs/manual.html" style="color:var(--accent)">Documentation / Manual</a> |
 <a href="https://github.com/Smit1237/reticulum-espnow" style="color:var(--accent)">GitHub</a>
 </p>
 
@@ -115,6 +115,9 @@ let versionsManifest = null;
 let selectedVersion = null;
 let availableFirmware = {};
 let selectedFwUrl = null;
+
+// Base URL for firmware files — works whether served from / or /flasher/
+const SITE_BASE = window.location.pathname.includes('/flasher/') ? '..' : '.';
 
 // Map detected chip string to our naming
 function chipToKey(chipStr) {
@@ -181,7 +184,7 @@ function setStatus(msg, type) {
 // Load versions manifest from gh-pages
 async function loadVersionsManifest() {
     try {
-        const resp = await fetch('firmware/versions.json');
+        const resp = await fetch(SITE_BASE + '/firmware/versions.json');
         if (resp.ok) {
             versionsManifest = await resp.json();
             log('Found ' + versionsManifest.versions.length + ' firmware version(s)');
@@ -217,7 +220,7 @@ function buildFirmwareMap(versionEntry) {
         if (match && FIRMWARE_DB[match[1]]) {
             availableFirmware[match[1]] = {
                 name: filename,
-                url: `firmware/${ver}/${filename}`
+                url: `${SITE_BASE}/firmware/${ver}/${filename}`
             };
         }
     }
