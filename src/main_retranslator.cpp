@@ -234,7 +234,10 @@ void reticulum_setup() {
 void setup() {
 	Serial.begin(115200);
 	delay(500);
-	Serial.println("\r\n=== TRANSPORT NODE ===");
+#ifndef FIRMWARE_VERSION
+	#define FIRMWARE_VERSION "dev"
+#endif
+	Serial.printf("\r\n=== TRANSPORT NODE %s ===\r\n", FIRMWARE_VERSION);
 
 #if LED_USER_PIN >= 0
 	pinMode(LED_USER_PIN, OUTPUT);

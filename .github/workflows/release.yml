@@ -1,0 +1,134 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build firmware (${{ matrix.group }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: riscv
+            envs: >-
+              client_c3
+              retranslator_c3
+              retranslator_c3_debug
+              client_c6
+              retranslator_c6
+              uart_c3
+              uart_c6
+          - group: xtensa-s3
+            envs: >-
+              client_s3
+              retranslator_s3
+              retranslator_s3_r2
+              retranslator_s3_r8
+              uart_s3
+          - group: xtensa-esp32
+            envs: >-
+              client_esp32
+              retranslator_esp32
+              retranslator_esp32_debug
+              retranslator_wrover
+              retranslator_wrover_debug
+              client_espcam
+              retranslator_espcam
+              retranslator_espcam_debug
+              uart_esp32
+          - group: xtensa-other
+            envs: >-
+              client_tdisplay
+              retranslator_tdisplay
+              uart_tdisplay
+              retranslator_s2
+              uart_s2
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.platformio/
+          key: ${{ runner.os }}-pio-${{ matrix.group }}-${{ hashFiles('platformio.ini') }}
+          restore-keys: |
+            ${{ runner.os }}-pio-${{ matrix.group }}-
+            ${{ runner.os }}-pio-
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+
+      - name: Build environments
+        env:
+          FIRMWARE_VERSION: ${{ github.ref_name }}
+        run: |
+          for env in ${{ matrix.envs }}; do
+            echo "Building $env..."
+            pio run -e "$env"
+          done
+
+      - name: Collect binaries
+        run: |
+          mkdir -p artifacts
+          find .pio/build -name "firmware_*.bin" -exec cp {} artifacts/ \;
+          ls -la artifacts/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.group }}
+          path: artifacts/
+          retention-days: 3
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all firmware artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: firmware
+          pattern: firmware-*
+          merge-multiple: true
+
+      - name: List binaries
+        run: ls -la firmware/
+
+      - name: Generate SHA256 checksums
+        run: |
+          cd firmware
+          sha256sum *.bin > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            firmware/*.bin
+            firmware/SHA256SUMS.txt
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}

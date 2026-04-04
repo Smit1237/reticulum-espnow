@@ -425,7 +425,10 @@ void setup() {
 	Serial0.begin(115200);  // UART0 for boards with both USB CDC + UART
 #endif
 	delay(500);
-	DualPrintf("\r\n=== ESP-NOW RNode BLE Bridge ===\r\n");
+#ifndef FIRMWARE_VERSION
+	#define FIRMWARE_VERSION "dev"
+#endif
+	DualPrintf("\r\n=== ESP-NOW RNode BLE Bridge %s ===\r\n", FIRMWARE_VERSION);
 
 #if LED_USER_PIN >= 0
 	pinMode(LED_USER_PIN, OUTPUT);
