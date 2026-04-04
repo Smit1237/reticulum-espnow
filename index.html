@@ -401,7 +401,23 @@ window.flashFirmware = async function() {
         log('Flash complete!');
         setStatus('Flash successful! Resetting...', 'ok');
 
-        await esploader.after('hard_reset');
+        try {
+            await esploader.after('hard_reset');
+        } catch (e) {
+            log('Auto-reset failed, trying manual RTS toggle...');
+        }
+
+        // Force reset via RTS/DTR toggle (works on most USB-UART adapters)
+        try {
+            await transport.setDTR(false);
+            await transport.setRTS(true);
+            await new Promise(r => setTimeout(r, 100));
+            await transport.setRTS(false);
+            await new Promise(r => setTimeout(r, 100));
+        } catch (e) {
+            log('RTS toggle failed: ' + e.message);
+        }
+
         log('Device reset. Done.');
         setStatus('Flash successful! Device running.', 'ok');
 
