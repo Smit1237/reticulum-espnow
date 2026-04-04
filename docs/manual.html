@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reticulum ESP-NOW Mesh Firmware -- Manual</title>
+<style>
+:root { --bg: #1a1a2e; --fg: #e0e0e0; --accent: #00d4ff; --accent2: #00ff88; --warn: #ffcc00; --err: #ff4444; --dim: #666; --card: #16213e; --border: #0f3460; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.6; padding: 0; }
+.container { max-width: 960px; margin: 0 auto; padding: 20px; }
+header { background: var(--card); border-bottom: 2px solid var(--border); padding: 16px 0; position: sticky; top: 0; z-index: 100; }
+header .container { display: flex; justify-content: space-between; align-items: center; }
+header h1 { font-size: 1.4em; color: var(--accent); }
+.lang-switch { display: flex; gap: 4px; }
+.lang-switch button { padding: 6px 14px; border: 1px solid var(--border); background: var(--card); color: var(--fg); cursor: pointer; border-radius: 4px; font-size: 0.9em; }
+.lang-switch button.active { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: bold; }
+h2 { color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 8px; margin: 32px 0 16px; font-size: 1.3em; }
+h3 { color: var(--accent2); margin: 20px 0 10px; font-size: 1.1em; }
+p { margin: 8px 0; }
+table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.9em; }
+th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; }
+th { background: var(--card); color: var(--accent); }
+tr:nth-child(even) { background: rgba(255,255,255,0.03); }
+code { background: var(--card); padding: 2px 6px; border-radius: 3px; font-family: 'Consolas', 'Courier New', monospace; font-size: 0.9em; color: var(--accent2); }
+pre { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 14px; overflow-x: auto; margin: 12px 0; font-size: 0.85em; }
+pre code { background: none; padding: 0; color: var(--fg); }
+.screen-mockup { display: inline-block; margin: 10px; vertical-align: top; }
+.screen-mockup .label { text-align: center; color: var(--dim); font-size: 0.8em; margin-top: 4px; }
+.screens { display: flex; flex-wrap: wrap; gap: 16px; margin: 16px 0; }
+.note { background: rgba(0,212,255,0.1); border-left: 3px solid var(--accent); padding: 10px 14px; margin: 12px 0; border-radius: 0 4px 4px 0; }
+.warn { background: rgba(255,204,0,0.1); border-left: 3px solid var(--warn); padding: 10px 14px; margin: 12px 0; border-radius: 0 4px 4px 0; }
+.lang-en, .lang-ru { display: none; }
+.lang-en.visible, .lang-ru.visible { display: block; }
+nav { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 14px; margin: 20px 0; }
+nav a { color: var(--accent); text-decoration: none; display: block; padding: 3px 0; }
+nav a:hover { text-decoration: underline; }
+footer { text-align: center; color: var(--dim); padding: 30px 0; font-size: 0.8em; border-top: 1px solid var(--border); margin-top: 40px; }
+@media print { body { background: #fff; color: #000; } header { position: static; } .lang-switch { display: none; } th { background: #eee; } pre, code { background: #f5f5f5; } }
+@media (max-width: 600px) { .screens { flex-direction: column; align-items: center; } table { font-size: 0.8em; } }
+</style>
+</head>
+<body>
+
+<header>
+<div class="container">
+<h1>Reticulum ESP-NOW Mesh</h1>
+<div class="lang-switch">
+<button id="btn-en" class="active" onclick="setLang('en')">EN</button>
+<button id="btn-ru" onclick="setLang('ru')">RU</button>
+</div>
+</div>
+</header>
+
+<div class="container">
+
+<!-- ==================== ENGLISH ==================== -->
+<div class="lang-en visible" id="content-en">
+
+<nav>
+<strong>Contents</strong>
+<a href="#overview">Overview</a>
+<a href="#hardware">Supported Hardware</a>
+<a href="#firmware">Firmware Types</a>
+<a href="#quickstart">Quick Start</a>
+<a href="#config">Configuration</a>
+<a href="#controls">User Controls</a>
+<a href="#pairing">BLE Pairing</a>
+<a href="#uart">UART Setup</a>
+<a href="#displays">Display Screens</a>
+<a href="#reset">Factory Reset</a>
+<a href="#envs">Build Environments</a>
+<a href="#limits">Known Limitations</a>
+<a href="#troubleshooting">Troubleshooting</a>
+</nav>
+
+<h2 id="overview">Overview</h2>
+<p>ESP-NOW based mesh networking firmware for ESP32 microcontrollers, providing Reticulum network connectivity through BLE and UART interfaces. Enables off-grid, encrypted mesh communication using Sideband, Columba, and other Reticulum-compatible applications.</p>
+
+<pre><code>Phone (Sideband)     ESP32 Client       ESP32 Retranslator     ESP32 Client      Phone
+     |                   |                    |                    |              |
+     |---BLE (KISS)----->|---ESP-NOW v2------->|---ESP-NOW v2------>|---BLE------->|
+     |                   |    802.11 LR       |    802.11 LR      |              |
+     |<--BLE (KISS)------|<--ESP-NOW v2--------|<--ESP-NOW v2------|<--BLE--------|</code></pre>
+
+<p>Three firmware types work together:</p>
+<ul>
+<li><strong>Client</strong> -- BLE bridge between phone and ESP-NOW mesh</li>
+<li><strong>Retranslator</strong> -- transport node that routes and relays packets</li>
+<li><strong>UART Client</strong> -- serial bridge between PC and mesh (921600 baud)</li>
+</ul>
+
+<p>All nodes use ESP-NOW v2.0 with 1470-byte payloads and 802.11 Long Range mode for up to 500m line-of-sight range.</p>
+
+<h2 id="hardware">Supported Hardware</h2>
+<table>
+<tr><th>Board</th><th>Chip</th><th>Display</th><th>BLE</th><th>Client</th><th>Retranslator</th><th>UART</th></tr>
+<tr><td>ESP32-C3 + OLED</td><td>ESP32-C3</td><td>SSD1306 72x40</td><td>5.0</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+<tr><td>LilyGO T-Display</td><td>ESP32</td><td>ST7789 135x240</td><td>4.2</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+<tr><td>ESP32-S3 DevKitC</td><td>ESP32-S3</td><td>None</td><td>5.0</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+<tr><td>ESP32 DevKit</td><td>ESP32</td><td>None</td><td>4.2</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+<tr><td>ESP32-C6 DevKitC</td><td>ESP32-C6</td><td>None</td><td>5.0</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+<tr><td>ESP32-S2 Saola</td><td>ESP32-S2</td><td>None</td><td>No</td><td>No</td><td>Yes</td><td>Yes</td></tr>
+</table>
+
+<h3>ESP32-S3 Retranslator PSRAM Variants</h3>
+<table>
+<tr><th>Module</th><th>PSRAM</th><th>Bus</th><th>Max Paths</th><th>Environment</th></tr>
+<tr><td>N16R8, N8R8</td><td>8 MB</td><td>Octal SPI</td><td>4096</td><td>retranslator_s3_r8</td></tr>
+<tr><td>N4R2, N8R2, N16R2</td><td>2 MB</td><td>Quad SPI</td><td>1024</td><td>retranslator_s3_r2</td></tr>
+<tr><td>N4, N8, N16</td><td>None</td><td>--</td><td>128</td><td>retranslator_s3</td></tr>
+</table>
+
+<h2 id="firmware">Firmware Types</h2>
+
+<h3>BLE Client</h3>
+<p>Bridges a phone running Sideband/Columba (via BLE) to the ESP-NOW mesh. Emulates RNode over Nordic UART Service (NUS) with KISS framing. Phone runs the full Reticulum stack; the device is a transparent radio modem.</p>
+
+<h3>Retranslator</h3>
+<p>Runs the full microReticulum transport stack. Learns paths from announces, rebroadcasts announces, and forwards packets between nodes. Purely infrastructure -- no user-facing messaging capability. Invisible to Sideband/Columba users but extends mesh range.</p>
+
+<h3>UART Client</h3>
+<p>Same as BLE client but communicates over USB serial at 921600 baud instead of BLE. For connecting a PC or laptop running Reticulum directly via USB cable. No BLE dependency, simpler and more reliable than wireless link.</p>
+
+<h2 id="quickstart">Quick Start</h2>
+
+<h3>Prerequisites</h3>
+<ul>
+<li>PlatformIO CLI or VS Code with PlatformIO extension</li>
+<li>USB cable for the target board</li>
+<li>For BLE client: Android phone with Sideband or Columba</li>
+</ul>
+
+<h3>Build and Flash</h3>
+<pre><code># Build for ESP32-C3 BLE client (default)
+pio run -e client_c3
+
+# Flash to connected board
+pio run -e client_c3 -t upload
+
+# Flash to specific port
+pio run -e client_c3 -t upload --upload-port COM24
+
+# Monitor serial output
+pio device monitor</code></pre>
+
+<h2 id="config">Configuration</h2>
+<p>All settings are in <code>include/board_config.h</code>:</p>
+
+<table>
+<tr><th>Setting</th><th>Default</th><th>Description</th></tr>
+<tr><td><code>ESPNOW_CHANNEL</code></td><td>13</td><td>WiFi channel (1-13). All nodes must match.</td></tr>
+<tr><td><code>ESPNOW_LONG_RANGE</code></td><td>1</td><td>802.11 LR mode. 1=enabled (~500m), 0=standard (~200m).</td></tr>
+<tr><td><code>TRANSPORT_ANNOUNCE_INTERVAL_MS</code></td><td>7200000</td><td>Retranslator re-announce interval (2 hours).</td></tr>
+</table>
+
+<h2 id="controls">User Controls</h2>
+
+<h3>BLE Client</h3>
+<table>
+<tr><th>Action</th><th>Duration</th><th>Result</th></tr>
+<tr><td>Double-tap BOOT</td><td>2 quick taps</td><td>Toggle display + LEDs on/off (saved to NVS)</td></tr>
+<tr><td>Hold BOOT</td><td>2+ seconds</td><td>Enter BLE pairing mode</td></tr>
+</table>
+
+<h3>Retranslator</h3>
+<table>
+<tr><th>Action</th><th>Duration</th><th>Result</th></tr>
+<tr><td>Double-tap BOOT</td><td>2 quick taps</td><td>Toggle display + LEDs on/off (saved to NVS)</td></tr>
+<tr><td>Hold BOOT</td><td>5+ seconds</td><td>Factory reset (erases identity and paths)</td></tr>
+</table>
+
+<h3>UART Client</h3>
+<table>
+<tr><th>Action</th><th>Duration</th><th>Result</th></tr>
+<tr><td>Double-tap BOOT</td><td>2 quick taps</td><td>Toggle display on/off (saved to NVS)</td></tr>
+</table>
+
+<h2 id="pairing">BLE Pairing</h2>
+<ol>
+<li>Flash BLE client firmware and power on the board</li>
+<li>Device advertises as <code>RNode XXXX</code> (XXXX = last 2 bytes of MAC)</li>
+<li>In Sideband: Settings > Connectivity > enable "Connect via RNode"</li>
+<li>Hardware > RNode > check "Device requires BLE" > Scan</li>
+<li>Select the device -- a 6-digit PIN appears on the display</li>
+<li>Enter PIN on phone -- connection established</li>
+</ol>
+
+<div class="note">On boards without a display, the PIN is printed to serial console every 10 seconds. Connect via USB at 115200 baud to see it.</div>
+
+<p>To pair with a different phone, hold BOOT for 2+ seconds. This clears existing bonds and restarts advertising.</p>
+
+<h2 id="uart">UART Setup</h2>
+<p>Add to Reticulum config (<code>~/.reticulum/config</code>):</p>
+<pre><code>[[ESP-NOW Serial]]
+  type = RNodeInterface
+  port = /dev/ttyUSB0    # Linux
+  # port = COM11         # Windows
+  speed = 921600</code></pre>
+
+<h2 id="displays">Display Screens</h2>
+
+<h3>SSD1306 OLED (72x40, ESP32-C3)</h3>
+<div class="screens">
+
+<div class="screen-mockup">
+<svg width="216" height="120" viewBox="0 0 216 120">
+<rect width="216" height="120" rx="6" fill="#222"/>
+<rect x="8" y="8" width="200" height="104" rx="3" fill="#000"/>
+<!-- Boot screen -->
+<circle cx="22" cy="24" r="5" stroke="#fff" fill="none" stroke-width="1.5"/>
+<text x="34" y="28" font-family="monospace" font-size="12" fill="#fff">RNode</text>
+<text x="16" y="48" font-family="monospace" font-size="10" fill="#888">booting...</text>
+</svg>
+<div class="label">Boot</div>
+</div>
+
+<div class="screen-mockup">
+<svg width="216" height="120" viewBox="0 0 216 120">
+<rect width="216" height="120" rx="6" fill="#222"/>
+<rect x="8" y="8" width="200" height="104" rx="3" fill="#000"/>
+<!-- Connected status -->
+<circle cx="22" cy="24" r="5" fill="#fff"/>
+<text x="34" y="28" font-family="monospace" font-size="10" fill="#fff">RNode C6D4</text>
+<text x="16" y="48" font-family="monospace" font-size="10" fill="#fff">TX: 1234</text>
+<text x="16" y="64" font-family="monospace" font-size="10" fill="#fff">RX: 5678</text>
+<text x="16" y="80" font-family="monospace" font-size="10" fill="#fff">32.5 C</text>
+</svg>
+<div class="label">Client -- Connected</div>
+</div>
+
+<div class="screen-mockup">
+<svg width="216" height="120" viewBox="0 0 216 120">
+<rect width="216" height="120" rx="6" fill="#222"/>
+<rect x="8" y="8" width="200" height="104" rx="3" fill="#000"/>
+<!-- Disconnected -->
+<circle cx="22" cy="24" r="5" stroke="#fff" fill="none" stroke-width="1.5"/>
+<text x="34" y="28" font-family="monospace" font-size="10" fill="#fff">RNode C6D4</text>
+<text x="16" y="48" font-family="monospace" font-size="10" fill="#888">TX: 0</text>
+<text x="16" y="64" font-family="monospace" font-size="10" fill="#888">RX: 0</text>
+<text x="16" y="80" font-family="monospace" font-size="10" fill="#fff">28.1 C</text>
+</svg>
+<div class="label">Client -- Disconnected</div>
+</div>
+
+<div class="screen-mockup">
+<svg width="216" height="120" viewBox="0 0 216 120">
+<rect width="216" height="120" rx="6" fill="#222"/>
+<rect x="8" y="8" width="200" height="104" rx="3" fill="#000"/>
+<!-- Pairing mode -->
+<circle cx="22" cy="24" r="5" stroke="#fff" fill="none" stroke-width="1.5"/>
+<text x="34" y="28" font-family="monospace" font-size="10" fill="#fff">RNode C6D4</text>
+<text x="16" y="50" font-family="monospace" font-size="10" fill="#fff">PAIRING...</text>
+<text x="16" y="66" font-family="monospace" font-size="10" fill="#888">Connect from</text>
+<text x="16" y="80" font-family="monospace" font-size="10" fill="#888">phone now</text>
+</svg>
+<div class="label">Client -- Pairing Mode</div>
+</div>
+
+<div class="screen-mockup">
+<svg width="216" height="120" viewBox="0 0 216 120">
+<rect width="216" height="120" rx="6" fill="#222"/>
+<rect x="8" y="8" width="200" height="104" rx="3" fill="#000"/>
+<!-- PIN display -->
+<text x="40" y="32" font-family="monospace" font-size="10" fill="#888">PAIR PIN:</text>
+<text x="24" y="72" font-family="monospace" font-size="28" fill="#fff" font-weight="bold">474567</text>
+</svg>
+<div class="label">Client -- PIN Display</div>
+</div>
+
+<div class="screen-mockup">
+<svg width="216" height="120" viewBox="0 0 216 120">
+<rect width="216" height="120" rx="6" fill="#222"/>
+<rect x="8" y="8" width="200" height="104" rx="3" fill="#000"/>
+<!-- Retranslator -->
+<path d="M16,20 L20,16 L24,20 M20,16 L20,28 M26,22 L30,18 M14,22 L10,18" stroke="#fff" fill="none" stroke-width="1.5"/>
+<text x="34" y="28" font-family="monospace" font-size="10" fill="#fff">TRANSPORT</text>
+<text x="16" y="48" font-family="monospace" font-size="10" fill="#fff">TX: 167</text>
+<text x="16" y="64" font-family="monospace" font-size="10" fill="#fff">RX: 4521</text>
+<text x="16" y="80" font-family="monospace" font-size="10" fill="#fff">31.2 C</text>
+</svg>
+<div class="label">Retranslator</div>
+</div>
+
+</div>
+
+<h3>ST7789 TFT (135x240, T-Display)</h3>
+<div class="screens">
+
+<div class="screen-mockup">
+<svg width="320" height="180" viewBox="0 0 320 180">
+<rect width="320" height="180" rx="8" fill="#333"/>
+<rect x="10" y="10" width="300" height="160" rx="4" fill="#000"/>
+<!-- TFT Connected -->
+<circle cx="30" cy="36" r="8" fill="#00ff88"/>
+<text x="46" y="42" font-family="sans-serif" font-size="20" fill="#fff" font-weight="bold">RNode C6D4</text>
+<text x="20" y="72" font-family="sans-serif" font-size="14" fill="#888">TX: </text><text x="52" y="72" font-family="sans-serif" font-size="14" fill="#fff">1234</text>
+<text x="20" y="94" font-family="sans-serif" font-size="14" fill="#888">RX: </text><text x="52" y="94" font-family="sans-serif" font-size="14" fill="#fff">5678</text>
+<text x="20" y="116" font-family="sans-serif" font-size="14" fill="#fff">32.5 C</text>
+<text x="200" y="72" font-family="sans-serif" font-size="14" fill="#00ff88">BLE OK</text>
+</svg>
+<div class="label">TFT Client -- Connected</div>
+</div>
+
+<div class="screen-mockup">
+<svg width="320" height="180" viewBox="0 0 320 180">
+<rect width="320" height="180" rx="8" fill="#333"/>
+<rect x="10" y="10" width="300" height="160" rx="4" fill="#000"/>
+<!-- TFT PIN -->
+<text x="100" y="50" font-family="sans-serif" font-size="14" fill="#888">PAIR PIN:</text>
+<text x="60" y="110" font-family="sans-serif" font-size="40" fill="#00d4ff" font-weight="bold">474567</text>
+</svg>
+<div class="label">TFT Client -- PIN Display</div>
+</div>
+
+</div>
+
+<h2 id="reset">Factory Reset</h2>
+<p>Retranslator only. Hold BOOT button for 5 seconds:</p>
+<ol>
+<li>NVS data cleared (display preferences, initialization flag)</li>
+<li>Filesystem formatted (Reticulum identity and learned paths erased)</li>
+<li>LED turns red during process</li>
+<li>Device reboots and generates new transport identity</li>
+</ol>
+<div class="warn">This operation is irreversible. The retranslator will appear as a new node on the mesh after reset.</div>
+
+<h2 id="envs">Build Environments</h2>
+
+<h3>Client (BLE Bridge) -- 5 environments</h3>
+<table>
+<tr><th>Environment</th><th>Board</th><th>Display</th></tr>
+<tr><td><code>client_c3</code></td><td>ESP32-C3</td><td>SSD1306 OLED</td></tr>
+<tr><td><code>client_tdisplay</code></td><td>T-Display</td><td>ST7789 TFT</td></tr>
+<tr><td><code>client_s3</code></td><td>ESP32-S3</td><td>None (RGB LED)</td></tr>
+<tr><td><code>client_esp32</code></td><td>ESP32</td><td>None</td></tr>
+<tr><td><code>client_c6</code></td><td>ESP32-C6</td><td>None</td></tr>
+</table>
+
+<h3>Retranslator (Transport) -- 9 environments</h3>
+<table>
+<tr><th>Environment</th><th>Board</th><th>Display</th><th>Paths</th></tr>
+<tr><td><code>retranslator_c3</code></td><td>ESP32-C3</td><td>SSD1306</td><td>48</td></tr>
+<tr><td><code>retranslator_c3_debug</code></td><td>ESP32-C3</td><td>SSD1306</td><td>48</td></tr>
+<tr><td><code>retranslator_tdisplay</code></td><td>T-Display</td><td>ST7789</td><td>48</td></tr>
+<tr><td><code>retranslator_s3_r8</code></td><td>ESP32-S3</td><td>None</td><td>4096</td></tr>
+<tr><td><code>retranslator_s3_r2</code></td><td>ESP32-S3</td><td>None</td><td>1024</td></tr>
+<tr><td><code>retranslator_s3</code></td><td>ESP32-S3</td><td>None</td><td>128</td></tr>
+<tr><td><code>retranslator_esp32</code></td><td>ESP32</td><td>None</td><td>128</td></tr>
+<tr><td><code>retranslator_c6</code></td><td>ESP32-C6</td><td>None</td><td>48</td></tr>
+<tr><td><code>retranslator_s2</code></td><td>ESP32-S2</td><td>None</td><td>48</td></tr>
+</table>
+
+<h3>UART Client (Serial Bridge) -- 6 environments</h3>
+<table>
+<tr><th>Environment</th><th>Board</th><th>Display</th></tr>
+<tr><td><code>uart_c3</code></td><td>ESP32-C3</td><td>SSD1306 OLED</td></tr>
+<tr><td><code>uart_tdisplay</code></td><td>T-Display</td><td>ST7789 TFT</td></tr>
+<tr><td><code>uart_s3</code></td><td>ESP32-S3</td><td>None</td></tr>
+<tr><td><code>uart_esp32</code></td><td>ESP32</td><td>None</td></tr>
+<tr><td><code>uart_c6</code></td><td>ESP32-C6</td><td>None</td></tr>
+<tr><td><code>uart_s2</code></td><td>ESP32-S2</td><td>None</td></tr>
+</table>
+
+<h2 id="limits">Known Limitations</h2>
+<ul>
+<li><strong>ESP32-C3 retranslator memory</strong> -- limited to small networks (up to 20 nodes) due to upstream microReticulum heap management issues under heavy announce traffic. Use ESP32-S3 with PSRAM for larger deployments.</li>
+<li><strong>Periodic re-announce</strong> -- disabled on constrained hardware due to stability issues. Initial boot announce works. Not needed for single-hop broadcast meshes.</li>
+<li><strong>ESP32-S2</strong> -- retranslator and UART only (no BLE hardware).</li>
+<li><strong>ESP32-S3 PSRAM</strong> -- octal PSRAM modules (R8) require solder bridge on some dev boards. Check board documentation.</li>
+</ul>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+<table>
+<tr><th>Problem</th><th>Solution</th></tr>
+<tr><td>BLE device not visible</td><td>On Android 15+, enable "Show unsupported BLE devices" in Developer Options. Hold BOOT 2s to re-enter pairing mode.</td></tr>
+<tr><td>Sideband: "no unpaired RNodes"</td><td>Unpair from Android Bluetooth settings first, then scan again in Sideband with "Device requires BLE" checked.</td></tr>
+<tr><td>Display stays black</td><td>Double-tap BOOT -- display may be toggled off (state persisted across reboots).</td></tr>
+<tr><td>Serial output garbled</td><td>Check baud rate: 115200 for monitor, 921600 for UART client. Ensure CR+LF line endings.</td></tr>
+<tr><td>ESP-NOW nodes not connecting</td><td>All nodes must use same ESPNOW_CHANNEL and ESPNOW_LONG_RANGE setting. Check range.</td></tr>
+<tr><td>Factory reset not triggering</td><td>Hold BOOT for full 5 seconds. LED turns red when reset activates. Only available on retranslator firmware.</td></tr>
+<tr><td>Board stuck after partial flash</td><td>Hold BOOT, press RESET, release BOOT to enter download mode. Reflash.</td></tr>
+</table>
+
+</div>
+
+<!-- ==================== RUSSIAN ==================== -->
+<div class="lang-ru" id="content-ru">
+
+<nav>
+<strong>Содержание</strong>
+<a href="#overview-ru">Обзор</a>
+<a href="#hardware-ru">Оборудование</a>
+<a href="#firmware-ru">Типы прошивки</a>
+<a href="#quickstart-ru">Быстрый старт</a>
+<a href="#config-ru">Настройка</a>
+<a href="#controls-ru">Управление</a>
+<a href="#pairing-ru">Сопряжение BLE</a>
+<a href="#uart-ru">Настройка UART</a>
+<a href="#displays-ru">Экраны</a>
+<a href="#reset-ru">Сброс настроек</a>
+<a href="#limits-ru">Ограничения</a>
+<a href="#troubleshooting-ru">Решение проблем</a>
+</nav>
+
+<h2 id="overview-ru">Обзор</h2>
+<p>Прошивка mesh-сети на основе ESP-NOW для микроконтроллеров ESP32, обеспечивающая подключение к сети Reticulum через BLE и UART. Позволяет организовать автономную зашифрованную mesh-связь с использованием Sideband, Columba и других Reticulum-совместимых приложений.</p>
+
+<pre><code>Телефон (Sideband)   ESP32 Клиент        ESP32 Ретранслятор     ESP32 Клиент       Телефон
+     |                   |                    |                    |              |
+     |---BLE (KISS)----->|---ESP-NOW v2------->|---ESP-NOW v2------>|---BLE------->|
+     |                   |    802.11 LR       |    802.11 LR      |              |
+     |<--BLE (KISS)------|<--ESP-NOW v2--------|<--ESP-NOW v2------|<--BLE--------|</code></pre>
+
+<p>Три типа прошивки работают совместно:</p>
+<ul>
+<li><strong>Client</strong> -- BLE мост между телефоном и ESP-NOW mesh</li>
+<li><strong>Retranslator</strong> -- транспортный узел для маршрутизации пакетов</li>
+<li><strong>UART Client</strong> -- последовательный мост между ПК и mesh (921600 бод)</li>
+</ul>
+
+<h2 id="hardware-ru">Поддерживаемое оборудование</h2>
+<table>
+<tr><th>Плата</th><th>Чип</th><th>Дисплей</th><th>BLE</th><th>Client</th><th>Retranslator</th><th>UART</th></tr>
+<tr><td>ESP32-C3 + OLED</td><td>ESP32-C3</td><td>SSD1306 72x40</td><td>5.0</td><td>Да</td><td>Да</td><td>Да</td></tr>
+<tr><td>LilyGO T-Display</td><td>ESP32</td><td>ST7789 135x240</td><td>4.2</td><td>Да</td><td>Да</td><td>Да</td></tr>
+<tr><td>ESP32-S3 DevKitC</td><td>ESP32-S3</td><td>Нет</td><td>5.0</td><td>Да</td><td>Да</td><td>Да</td></tr>
+<tr><td>ESP32 DevKit</td><td>ESP32</td><td>Нет</td><td>4.2</td><td>Да</td><td>Да</td><td>Да</td></tr>
+<tr><td>ESP32-C6 DevKitC</td><td>ESP32-C6</td><td>Нет</td><td>5.0</td><td>Да</td><td>Да</td><td>Да</td></tr>
+<tr><td>ESP32-S2 Saola</td><td>ESP32-S2</td><td>Нет</td><td>Нет</td><td>Нет</td><td>Да</td><td>Да</td></tr>
+</table>
+
+<h3>Варианты ESP32-S3 с PSRAM</h3>
+<table>
+<tr><th>Модуль</th><th>PSRAM</th><th>Шина</th><th>Макс. маршрутов</th><th>Окружение</th></tr>
+<tr><td>N16R8, N8R8</td><td>8 МБ</td><td>Octal SPI</td><td>4096</td><td>retranslator_s3_r8</td></tr>
+<tr><td>N4R2, N8R2, N16R2</td><td>2 МБ</td><td>Quad SPI</td><td>1024</td><td>retranslator_s3_r2</td></tr>
+<tr><td>N4, N8, N16</td><td>Нет</td><td>--</td><td>128</td><td>retranslator_s3</td></tr>
+</table>
+
+<h2 id="firmware-ru">Типы прошивки</h2>
+
+<h3>BLE Client</h3>
+<p>Мост между телефоном с Sideband/Columba (через BLE) и ESP-NOW mesh. Эмулирует RNode через Nordic UART Service (NUS) с KISS-кадрированием. Телефон выполняет полный стек Reticulum; устройство -- прозрачный радиомодем.</p>
+
+<h3>Retranslator</h3>
+<p>Выполняет полный транспортный стек microReticulum. Изучает маршруты из анонсов, ретранслирует анонсы и перенаправляет пакеты между узлами. Чисто инфраструктурный -- невидим для пользователей Sideband/Columba, но расширяет зону покрытия mesh.</p>
+
+<h3>UART Client</h3>
+<p>Аналогичен BLE клиенту, но взаимодействует через USB Serial на скорости 921600 бод. Для подключения ПК или ноутбука с Reticulum напрямую через USB кабель.</p>
+
+<h2 id="quickstart-ru">Быстрый старт</h2>
+<pre><code># Сборка для ESP32-C3 BLE клиента
+pio run -e client_c3
+
+# Прошивка на подключенную плату
+pio run -e client_c3 -t upload
+
+# Прошивка на конкретный порт
+pio run -e client_c3 -t upload --upload-port COM24</code></pre>
+
+<h2 id="config-ru">Настройка</h2>
+<p>Все параметры в <code>include/board_config.h</code>:</p>
+<table>
+<tr><th>Параметр</th><th>По умолчанию</th><th>Описание</th></tr>
+<tr><td><code>ESPNOW_CHANNEL</code></td><td>13</td><td>WiFi канал (1-13). Все узлы должны совпадать.</td></tr>
+<tr><td><code>ESPNOW_LONG_RANGE</code></td><td>1</td><td>Режим 802.11 LR. 1=включен (~500 м), 0=стандарт (~200 м).</td></tr>
+<tr><td><code>TRANSPORT_ANNOUNCE_INTERVAL_MS</code></td><td>7200000</td><td>Интервал реанонса ретранслятора (2 часа).</td></tr>
+</table>
+
+<h2 id="controls-ru">Управление кнопками</h2>
+
+<h3>BLE клиент</h3>
+<table>
+<tr><th>Действие</th><th>Длительность</th><th>Результат</th></tr>
+<tr><td>Двойное нажатие BOOT</td><td>2 быстрых нажатия</td><td>Вкл/выкл дисплей и светодиоды (сохраняется)</td></tr>
+<tr><td>Удержание BOOT</td><td>2+ секунды</td><td>Режим BLE сопряжения</td></tr>
+</table>
+
+<h3>Ретранслятор</h3>
+<table>
+<tr><th>Действие</th><th>Длительность</th><th>Результат</th></tr>
+<tr><td>Двойное нажатие BOOT</td><td>2 быстрых нажатия</td><td>Вкл/выкл дисплей и светодиоды (сохраняется)</td></tr>
+<tr><td>Удержание BOOT</td><td>5+ секунд</td><td>Сброс к заводским настройкам</td></tr>
+</table>
+
+<h2 id="pairing-ru">Сопряжение BLE</h2>
+<ol>
+<li>Прошейте BLE клиент и включите плату</li>
+<li>Устройство рекламирует себя как <code>RNode XXXX</code> (XXXX = последние 2 байта MAC)</li>
+<li>В Sideband: Настройки > Подключение > включите "Connect via RNode"</li>
+<li>Hardware > RNode > отметьте "Device requires BLE" > Scan</li>
+<li>Выберите устройство -- 6-значный PIN появится на дисплее</li>
+<li>Введите PIN на телефоне -- соединение установлено</li>
+</ol>
+
+<div class="note">На платах без дисплея PIN выводится в Serial каждые 10 секунд. Подключитесь через USB на 115200 бод.</div>
+
+<h2 id="uart-ru">Настройка UART</h2>
+<p>Добавьте в конфиг Reticulum (<code>~/.reticulum/config</code>):</p>
+<pre><code>[[ESP-NOW Serial]]
+  type = RNodeInterface
+  port = /dev/ttyUSB0    # Linux
+  # port = COM11         # Windows
+  speed = 921600</code></pre>
+
+<h2 id="displays-ru">Экраны устройств</h2>
+
+<h3>SSD1306 OLED (72x40, ESP32-C3)</h3>
+<div class="screens">
+
+<div class="screen-mockup">
+<svg width="216" height="120" viewBox="0 0 216 120">
+<rect width="216" height="120" rx="6" fill="#222"/>
+<rect x="8" y="8" width="200" height="104" rx="3" fill="#000"/>
+<circle cx="22" cy="24" r="5" fill="#fff"/>
+<text x="34" y="28" font-family="monospace" font-size="10" fill="#fff">RNode C6D4</text>
+<text x="16" y="48" font-family="monospace" font-size="10" fill="#fff">TX: 1234</text>
+<text x="16" y="64" font-family="monospace" font-size="10" fill="#fff">RX: 5678</text>
+<text x="16" y="80" font-family="monospace" font-size="10" fill="#fff">32.5 C</text>
+</svg>
+<div class="label">Клиент -- подключен</div>
+</div>
+
+<div class="screen-mockup">
+<svg width="216" height="120" viewBox="0 0 216 120">
+<rect width="216" height="120" rx="6" fill="#222"/>
+<rect x="8" y="8" width="200" height="104" rx="3" fill="#000"/>
+<text x="40" y="32" font-family="monospace" font-size="10" fill="#888">PAIR PIN:</text>
+<text x="24" y="72" font-family="monospace" font-size="28" fill="#fff" font-weight="bold">474567</text>
+</svg>
+<div class="label">Клиент -- PIN</div>
+</div>
+
+<div class="screen-mockup">
+<svg width="216" height="120" viewBox="0 0 216 120">
+<rect width="216" height="120" rx="6" fill="#222"/>
+<rect x="8" y="8" width="200" height="104" rx="3" fill="#000"/>
+<path d="M16,20 L20,16 L24,20 M20,16 L20,28 M26,22 L30,18 M14,22 L10,18" stroke="#fff" fill="none" stroke-width="1.5"/>
+<text x="34" y="28" font-family="monospace" font-size="10" fill="#fff">TRANSPORT</text>
+<text x="16" y="48" font-family="monospace" font-size="10" fill="#fff">TX: 167</text>
+<text x="16" y="64" font-family="monospace" font-size="10" fill="#fff">RX: 4521</text>
+<text x="16" y="80" font-family="monospace" font-size="10" fill="#fff">31.2 C</text>
+</svg>
+<div class="label">Ретранслятор</div>
+</div>
+
+</div>
+
+<h2 id="reset-ru">Сброс к заводским настройкам</h2>
+<p>Только для ретранслятора. Удерживайте кнопку BOOT 5 секунд:</p>
+<ol>
+<li>Данные NVS очищаются</li>
+<li>Файловая система форматируется (идентификатор и маршруты удаляются)</li>
+<li>Светодиод загорается красным</li>
+<li>Устройство перезагружается и генерирует новый идентификатор</li>
+</ol>
+<div class="warn">Операция необратима. Ретранслятор появится в сети как новый узел.</div>
+
+<h2 id="limits-ru">Известные ограничения</h2>
+<ul>
+<li><strong>Память ESP32-C3 ретранслятора</strong> -- ограничен малыми сетями (до 20 узлов). Для крупных сетей используйте ESP32-S3 с PSRAM.</li>
+<li><strong>Периодический реанонс</strong> -- отключен на ограниченном оборудовании. Начальный анонс при загрузке работает.</li>
+<li><strong>ESP32-S2</strong> -- только ретранслятор и UART (нет BLE).</li>
+<li><strong>ESP32-S3 PSRAM</strong> -- octal PSRAM модули (R8) требуют пайки перемычки на некоторых платах.</li>
+</ul>
+
+<h2 id="troubleshooting-ru">Решение проблем</h2>
+<table>
+<tr><th>Проблема</th><th>Решение</th></tr>
+<tr><td>BLE устройство не видно</td><td>На Android 15+ включите "Показывать неподдерживаемые BLE устройства" в настройках разработчика. Удерживайте BOOT 2 сек для режима сопряжения.</td></tr>
+<tr><td>Sideband: "no unpaired RNodes"</td><td>Удалите сопряжение в настройках Bluetooth Android, затем сканируйте снова с отмеченным "Device requires BLE".</td></tr>
+<tr><td>Дисплей не работает</td><td>Двойное нажатие BOOT -- дисплей может быть выключен (состояние сохраняется).</td></tr>
+<tr><td>Узлы ESP-NOW не соединяются</td><td>Все узлы должны быть на одном канале (ESPNOW_CHANNEL) с одинаковой настройкой LR режима.</td></tr>
+<tr><td>Плата зависла</td><td>Удерживайте BOOT, нажмите RESET, отпустите BOOT для входа в режим загрузки. Перепрошейте.</td></tr>
+</table>
+
+</div>
+
+</div>
+
+<footer>
+Reticulum ESP-NOW Mesh Firmware -- Technical Documentation
+</footer>
+
+<script>
+function setLang(lang) {
+  document.getElementById('content-en').classList.toggle('visible', lang === 'en');
+  document.getElementById('content-ru').classList.toggle('visible', lang === 'ru');
+  document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+  document.getElementById('btn-ru').classList.toggle('active', lang === 'ru');
+}
+</script>
+
+</body>
+</html>
