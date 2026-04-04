@@ -227,10 +227,16 @@ void kiss_feed(uint8_t byte) {
 
 // =============== Display ===============
 
+static float chip_temp = 0;
+static unsigned long last_temp_read = 0;
+
 void updateDisplay() {
 	if (!Display::isOn()) return;
-	Display::showStatus(true, "UART", tx_count, rx_count,
-	                    (unsigned long)ESP.getFreeHeap());
+	if (millis() - last_temp_read > 5000) {
+		chip_temp = temperatureRead();
+		last_temp_read = millis();
+	}
+	Display::showStatus(true, "UART", tx_count, rx_count, chip_temp);
 }
 
 // =============== SETUP ===============
