@@ -54,9 +54,14 @@ input[type="file"] { display: none; }
 <div class="step">
 <h2><span class="step-num">2</span> Select Firmware</h2>
 
-<label>Firmware Type:</label>
-<select id="sel-type" onchange="updateFirmwareList()" disabled>
+<label>Version:</label>
+<select id="sel-version" onchange="versionChanged()" disabled>
 <option value="">-- connect board first --</option>
+</select>
+
+<label style="margin-top:10px;display:block">Firmware Type:</label>
+<select id="sel-type" onchange="updateFirmwareList()" disabled>
+<option value="">-- select version first --</option>
 </select>
 
 <label style="margin-top:10px;display:block">Board / Variant:</label>
@@ -90,6 +95,11 @@ input[type="file"] { display: none; }
 
 <p class="warn">Web Serial API required. Supported: Chrome 89+, Edge 89+, Opera 76+. NOT supported: Firefox, Safari, iOS.</p>
 
+<p style="text-align:center; margin-top:16px; font-size:0.9em;">
+<a href="docs/manual.html" style="color:var(--accent)">Documentation / Manual</a> |
+<a href="https://github.com/Smit1237/reticulum-espnow" style="color:var(--accent)">GitHub</a>
+</p>
+
 </div>
 
 <script type="module">
@@ -100,30 +110,35 @@ let transport = null;
 let firmwareData = null;
 let detectedChip = null;
 
+// Version manifest loaded from versions.json
+let versionsManifest = null;
+let selectedVersion = null;
+let availableFirmware = {};
+let selectedFwUrl = null;
+
+// Base URL for firmware files — works whether served from / or /flasher/
+const SITE_BASE = window.location.pathname.includes('/flasher/') ? '..' : '.';
+
 // Map detected chip string to our naming
-// esptool-js returns full descriptions like "ESP32-D0WD-V3 (revision 3)"
-// or "ESP32-C3 (revision 4)" — we match by prefix
 function chipToKey(chipStr) {
     const s = chipStr.toUpperCase();
     if (s.includes('ESP32-C3')) return 'c3';
     if (s.includes('ESP32-C6')) return 'c6';
     if (s.includes('ESP32-S2')) return 's2';
     if (s.includes('ESP32-S3')) return 's3';
-    if (s.includes('ESP32-C2')) return null; // not supported
-    if (s.includes('ESP32'))   return 'esp32'; // classic ESP32 (must be last)
+    if (s.includes('ESP32-C2')) return null;
+    if (s.includes('ESP32'))   return 'esp32';
     return null;
 }
 
 // All firmware definitions: env name -> { chip, type, label }
 const FIRMWARE_DB = {
-    // Clients (BLE)
     'client_c3':        { chip: 'c3',    type: 'client',       label: 'ESP32-C3 + OLED' },
     'client_s3':        { chip: 's3',    type: 'client',       label: 'ESP32-S3' },
     'client_esp32':     { chip: 'esp32', type: 'client',       label: 'ESP32 Generic' },
     'client_espcam':    { chip: 'esp32', type: 'client',       label: 'ESP32-CAM' },
     'client_c6':        { chip: 'c6',    type: 'client',       label: 'ESP32-C6' },
     'client_tdisplay':  { chip: 'esp32', type: 'client',       label: 'LilyGO T-Display' },
-    // Retranslators
     'retranslator_c3':           { chip: 'c3',    type: 'retranslator', label: 'ESP32-C3 + OLED' },
     'retranslator_s3':           { chip: 's3',    type: 'retranslator', label: 'ESP32-S3 (no PSRAM)' },
     'retranslator_s3_r2':        { chip: 's3',    type: 'retranslator', label: 'ESP32-S3 R2 (2MB PSRAM)' },
@@ -134,7 +149,6 @@ const FIRMWARE_DB = {
     'retranslator_c6':           { chip: 'c6',    type: 'retranslator', label: 'ESP32-C6' },
     'retranslator_s2':           { chip: 's2',    type: 'retranslator', label: 'ESP32-S2' },
     'retranslator_tdisplay':     { chip: 'esp32', type: 'retranslator', label: 'LilyGO T-Display' },
-    // UART
     'uart_c3':        { chip: 'c3',    type: 'uart', label: 'ESP32-C3 + OLED' },
     'uart_s3':        { chip: 's3',    type: 'uart', label: 'ESP32-S3' },
     'uart_esp32':     { chip: 'esp32', type: 'uart', label: 'ESP32 Generic' },
@@ -148,14 +162,6 @@ const TYPE_LABELS = {
     'retranslator': 'Retranslator (Transport Node)',
     'uart':         'UART Client (Serial Bridge, 921600 baud)',
 };
-
-// Detect base URL for firmware files
-const BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? 'firmware/v1.0.0'  // local dev
-    : 'firmware/v1.0.0'; // gh-pages (same relative path)
-
-let availableFirmware = {}; // populated after version detection
-let selectedFwUrl = null;
 
 const logEl = document.getElementById('log');
 const statusEl = document.getElementById('status');
@@ -175,32 +181,201 @@ function setStatus(msg, type) {
     statusEl.className = 'status ' + (type || '');
 }
 
-// Scan available firmware files from GitHub API or local listing
-async function loadFirmwareList() {
+// Load versions manifest from gh-pages
+async function loadVersionsManifest() {
     try {
-        // Try GitHub API first (works on both local and gh-pages due to CORS)
+        const resp = await fetch(SITE_BASE + '/firmware/versions.json');
+        if (resp.ok) {
+            versionsManifest = await resp.json();
+            log('Found ' + versionsManifest.versions.length + ' firmware version(s)');
+            return;
+        }
+    } catch (e) { /* fall through */ }
+
+    // Fallback: try GitHub API for latest release
+    try {
         const resp = await fetch('https://api.github.com/repos/Smit1237/reticulum-espnow/releases/latest');
         if (resp.ok) {
             const data = await resp.json();
-            for (const asset of data.assets) {
-                if (asset.name.endsWith('.bin')) {
-                    // Extract env name: firmware_<env>_v1.0.0.bin -> <env>
-                    const match = asset.name.match(/^firmware_(.+)_v[\d.]+\.bin$/);
-                    if (match) {
-                        availableFirmware[match[1]] = {
-                            name: asset.name,
-                            size: asset.size,
-                            url: `${BASE_URL}/${asset.name}`
-                        };
-                    }
-                }
-            }
-            log('Loaded ' + Object.keys(availableFirmware).length + ' firmware files from release');
+            const files = data.assets.filter(a => a.name.endsWith('.bin')).map(a => a.name);
+            versionsManifest = {
+                latest: data.tag_name,
+                versions: [{ version: data.tag_name, date: data.published_at.split('T')[0], files }]
+            };
+            log('Loaded version from GitHub API: ' + data.tag_name);
+            return;
         }
-    } catch (e) {
-        log('Could not fetch release info: ' + e.message);
+    } catch (e) { /* fall through */ }
+
+    log('No firmware versions found. Use local file picker.');
+}
+
+// Build availableFirmware map for a specific version
+function buildFirmwareMap(versionEntry) {
+    availableFirmware = {};
+    const ver = versionEntry.version;
+    for (const filename of versionEntry.files) {
+        // firmware_<env>_<version>.bin -> extract env
+        const match = filename.match(/^firmware_(.+)_v[\d.]+(-[a-zA-Z0-9.]+)?\.bin$/);
+        if (match && FIRMWARE_DB[match[1]]) {
+            availableFirmware[match[1]] = {
+                name: filename,
+                url: `${SITE_BASE}/firmware/${ver}/${filename}`
+            };
+        }
     }
 }
+
+// Populate version dropdown
+function populateVersionDropdown() {
+    const sel = document.getElementById('sel-version');
+    sel.innerHTML = '';
+    sel.disabled = true;
+
+    if (!versionsManifest || versionsManifest.versions.length === 0) {
+        sel.innerHTML = '<option value="">No versions available</option>';
+        return;
+    }
+
+    sel.disabled = false;
+    for (const v of versionsManifest.versions) {
+        const opt = document.createElement('option');
+        opt.value = v.version;
+        opt.textContent = v.version + (v.version === versionsManifest.latest ? ' (latest)' : '') + ' — ' + v.date;
+        sel.appendChild(opt);
+    }
+
+    // Auto-select latest
+    sel.value = versionsManifest.latest;
+    versionChanged();
+}
+
+window.versionChanged = function() {
+    const ver = document.getElementById('sel-version').value;
+    const typeSel = document.getElementById('sel-type');
+    const fwSel = document.getElementById('sel-firmware');
+
+    // Reset downstream
+    typeSel.innerHTML = '<option value="">-- select firmware type --</option>';
+    typeSel.disabled = true;
+    fwSel.innerHTML = '<option value="">-- select type first --</option>';
+    fwSel.disabled = true;
+    firmwareData = null;
+    selectedFwUrl = null;
+    document.getElementById('fw-info').style.display = 'none';
+    updateFlashButton();
+
+    if (!ver || !versionsManifest) return;
+
+    const entry = versionsManifest.versions.find(v => v.version === ver);
+    if (!entry) return;
+
+    selectedVersion = ver;
+    buildFirmwareMap(entry);
+    log('Selected version ' + ver + ': ' + Object.keys(availableFirmware).length + ' firmware files');
+    populateTypeDropdown();
+};
+
+function populateTypeDropdown() {
+    const sel = document.getElementById('sel-type');
+    sel.innerHTML = '<option value="">-- select firmware type --</option>';
+    sel.disabled = false;
+
+    const chipKey = chipToKey(detectedChip) || '';
+    if (!chipKey) {
+        sel.innerHTML = '<option value="">Unsupported chip: ' + detectedChip + '</option>';
+        return;
+    }
+
+    const types = new Set();
+    for (const [env, info] of Object.entries(FIRMWARE_DB)) {
+        if (info.chip === chipKey && availableFirmware[env]) {
+            types.add(info.type);
+        }
+    }
+
+    for (const type of ['client', 'retranslator', 'uart']) {
+        if (types.has(type)) {
+            const opt = document.createElement('option');
+            opt.value = type;
+            opt.textContent = TYPE_LABELS[type];
+            sel.appendChild(opt);
+        }
+    }
+}
+
+window.updateFirmwareList = function() {
+    const type = document.getElementById('sel-type').value;
+    const sel = document.getElementById('sel-firmware');
+    sel.innerHTML = '';
+    sel.disabled = true;
+    selectedFwUrl = null;
+    firmwareData = null;
+    document.getElementById('fw-info').style.display = 'none';
+    updateFlashButton();
+
+    if (!type) {
+        sel.innerHTML = '<option value="">-- select type first --</option>';
+        return;
+    }
+
+    const chipKey = chipToKey(detectedChip) || '';
+    let count = 0;
+    sel.innerHTML = '<option value="">-- select board --</option>';
+
+    for (const [env, info] of Object.entries(FIRMWARE_DB)) {
+        if (info.chip === chipKey && info.type === type && availableFirmware[env]) {
+            const opt = document.createElement('option');
+            opt.value = env;
+            opt.textContent = info.label;
+            sel.appendChild(opt);
+            count++;
+        }
+    }
+
+    if (count > 0) {
+        sel.disabled = false;
+        if (count === 1) {
+            sel.selectedIndex = 1;
+            firmwareSelected();
+        }
+    } else {
+        sel.innerHTML = '<option value="">No firmware available for ' + detectedChip + '</option>';
+    }
+};
+
+window.firmwareSelected = async function() {
+    const env = document.getElementById('sel-firmware').value;
+    const fwInfo = document.getElementById('fw-info');
+    firmwareData = null;
+    selectedFwUrl = null;
+    fwInfo.style.display = 'none';
+    updateFlashButton();
+
+    if (!env || !availableFirmware[env]) return;
+
+    const fw = availableFirmware[env];
+    fwInfo.style.display = 'block';
+    fwInfo.textContent = fw.name + ' -- downloading...';
+
+    try {
+        const resp = await fetch(fw.url);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const blob = await resp.blob();
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            firmwareData = e.target.result;
+            selectedFwUrl = fw.url;
+            fwInfo.textContent = fw.name + ' (' + (firmwareData.length / 1024).toFixed(1) + ' KB) -- ready';
+            log('Firmware loaded: ' + fw.name);
+            updateFlashButton();
+        };
+        reader.readAsBinaryString(blob);
+    } catch (e) {
+        fwInfo.textContent = 'Download failed: ' + e.message + ' -- use file picker below';
+        log('Download failed: ' + e.message);
+    }
+};
 
 window.connectDevice = async function() {
     if (!('serial' in navigator)) {
@@ -235,116 +410,13 @@ window.connectDevice = async function() {
 
         log('Chip: ' + chip);
 
-        // Enable firmware selection
-        await loadFirmwareList();
-        populateTypeDropdown();
+        // Load versions and populate dropdowns
+        await loadVersionsManifest();
+        populateVersionDropdown();
 
     } catch (e) {
         log('Connection failed: ' + e.message);
         setStatus('Connection failed: ' + e.message, 'err');
-    }
-};
-
-function populateTypeDropdown() {
-    const sel = document.getElementById('sel-type');
-    sel.innerHTML = '<option value="">-- select firmware type --</option>';
-    sel.disabled = false;
-
-    const chipKey = chipToKey(detectedChip) || '';
-    if (!chipKey) {
-        sel.innerHTML = '<option value="">Unsupported chip: ' + detectedChip + '</option>';
-        return;
-    }
-
-    // Find which types have firmware for this chip
-    const types = new Set();
-    for (const [env, info] of Object.entries(FIRMWARE_DB)) {
-        if (info.chip === chipKey && availableFirmware[env]) {
-            types.add(info.type);
-        }
-    }
-
-    for (const type of ['client', 'retranslator', 'uart']) {
-        if (types.has(type)) {
-            const opt = document.createElement('option');
-            opt.value = type;
-            opt.textContent = TYPE_LABELS[type];
-            sel.appendChild(opt);
-        }
-    }
-}
-
-window.updateFirmwareList = function() {
-    const type = document.getElementById('sel-type').value;
-    const sel = document.getElementById('sel-firmware');
-    sel.innerHTML = '';
-    sel.disabled = true;
-    selectedFwUrl = null;
-    document.getElementById('fw-info').style.display = 'none';
-    updateFlashButton();
-
-    if (!type) {
-        sel.innerHTML = '<option value="">-- select type first --</option>';
-        return;
-    }
-
-    const chipKey = chipToKey(detectedChip) || '';
-    let count = 0;
-
-    sel.innerHTML = '<option value="">-- select board --</option>';
-
-    for (const [env, info] of Object.entries(FIRMWARE_DB)) {
-        if (info.chip === chipKey && info.type === type && availableFirmware[env]) {
-            const opt = document.createElement('option');
-            opt.value = env;
-            opt.textContent = info.label;
-            sel.appendChild(opt);
-            count++;
-        }
-    }
-
-    if (count > 0) {
-        sel.disabled = false;
-        // Auto-select if only one option
-        if (count === 1) {
-            sel.selectedIndex = 1;
-            firmwareSelected();
-        }
-    } else {
-        sel.innerHTML = '<option value="">No firmware available for ' + detectedChip + '</option>';
-    }
-};
-
-window.firmwareSelected = async function() {
-    const env = document.getElementById('sel-firmware').value;
-    const fwInfo = document.getElementById('fw-info');
-    firmwareData = null;
-    selectedFwUrl = null;
-    fwInfo.style.display = 'none';
-    updateFlashButton();
-
-    if (!env || !availableFirmware[env]) return;
-
-    const fw = availableFirmware[env];
-    fwInfo.style.display = 'block';
-    fwInfo.textContent = fw.name + ' (' + (fw.size / 1024).toFixed(1) + ' KB) -- downloading...';
-
-    try {
-        const resp = await fetch(fw.url);
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const blob = await resp.blob();
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            firmwareData = e.target.result;
-            selectedFwUrl = fw.url;
-            fwInfo.textContent = fw.name + ' (' + (fw.size / 1024).toFixed(1) + ' KB) -- ready';
-            log('Firmware loaded: ' + fw.name);
-            updateFlashButton();
-        };
-        reader.readAsBinaryString(blob);
-    } catch (e) {
-        fwInfo.textContent = 'Download failed: ' + e.message + ' -- use file picker below';
-        log('Download failed: ' + e.message);
     }
 };
 
@@ -383,7 +455,7 @@ window.flashFirmware = async function() {
     progressFill.style.width = '0%';
 
     try {
-        const offset = 0x10000; // App partition offset (all ESP32 variants)
+        const offset = 0x10000;
         log('Flashing at offset 0x' + offset.toString(16) + ' (' + firmwareData.length + ' bytes)...');
 
         await esploader.writeFlash({
@@ -401,16 +473,12 @@ window.flashFirmware = async function() {
         log('Flash complete!');
         setStatus('Flash successful! Resetting...', 'ok');
 
-        // Hard reset: classic sequence matching esptool.py
-        // RTS controls EN (reset), DTR controls IO0 (boot mode)
-        // We need EN low->high pulse with IO0 high (normal boot, not bootloader)
         try {
-            await transport.setDTR(false);  // IO0 high (normal boot)
-            await transport.setRTS(true);   // EN low (hold reset)
+            await transport.setDTR(false);
+            await transport.setRTS(true);
             await new Promise(r => setTimeout(r, 200));
-            await transport.setRTS(false);  // EN high (release reset)
+            await transport.setRTS(false);
             await new Promise(r => setTimeout(r, 200));
-            // Disconnect serial so the port is released
             await transport.disconnect();
             log('Device reset and port released.');
         } catch (e) {
@@ -419,7 +487,6 @@ window.flashFirmware = async function() {
         }
 
         setStatus('Flash successful! Device running.', 'ok');
-        // Disable flash button since port is closed
         document.getElementById('btn-connect').textContent = 'Connect';
         document.getElementById('btn-connect').disabled = false;
         esploader = null;

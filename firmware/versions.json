@@ -1,0 +1,37 @@
+{
+  "latest": "v1.0.0",
+  "versions": [
+    {
+      "version": "v1.0.0",
+      "date": "2026-04-05",
+      "files": [
+        "firmware_client_c3_v1.0.0.bin",
+        "firmware_client_c6_v1.0.0.bin",
+        "firmware_client_esp32_v1.0.0.bin",
+        "firmware_client_espcam_v1.0.0.bin",
+        "firmware_client_s3_v1.0.0.bin",
+        "firmware_client_tdisplay_v1.0.0.bin",
+        "firmware_retranslator_c3_debug_v1.0.0.bin",
+        "firmware_retranslator_c3_v1.0.0.bin",
+        "firmware_retranslator_c6_v1.0.0.bin",
+        "firmware_retranslator_esp32_debug_v1.0.0.bin",
+        "firmware_retranslator_esp32_v1.0.0.bin",
+        "firmware_retranslator_espcam_debug_v1.0.0.bin",
+        "firmware_retranslator_espcam_v1.0.0.bin",
+        "firmware_retranslator_s2_v1.0.0.bin",
+        "firmware_retranslator_s3_r2_v1.0.0.bin",
+        "firmware_retranslator_s3_r8_v1.0.0.bin",
+        "firmware_retranslator_s3_v1.0.0.bin",
+        "firmware_retranslator_tdisplay_v1.0.0.bin",
+        "firmware_retranslator_wrover_debug_v1.0.0.bin",
+        "firmware_retranslator_wrover_v1.0.0.bin",
+        "firmware_uart_c3_v1.0.0.bin",
+        "firmware_uart_c6_v1.0.0.bin",
+        "firmware_uart_esp32_v1.0.0.bin",
+        "firmware_uart_s2_v1.0.0.bin",
+        "firmware_uart_s3_v1.0.0.bin",
+        "firmware_uart_tdisplay_v1.0.0.bin"
+      ]
+    }
+  ]
+}
