@@ -170,7 +170,7 @@ All nodes in the mesh must use the same channel. Use the channel scanner tool to
 #define TRANSPORT_ANNOUNCE_INTERVAL_MS  (2 * 60 * 60 * 1000UL)  // 2 hours
 ```
 
-How often the retranslator re-announces itself on the mesh. Relevant for multi-hop chain deployments.
+Reserved for periodic retranslator re-announce on the mesh. Currently unused -- periodic re-announce is disabled due to stability issues on constrained hardware. The retranslator announces once at boot, which is sufficient for single-hop ESP-NOW broadcast meshes where all nodes hear each other directly.
 
 ### Debug Build
 
