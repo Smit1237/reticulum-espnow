@@ -173,10 +173,7 @@ pio device monitor</code></pre>
 </table>
 
 <h3>UART Client</h3>
-<table>
-<tr><th>Action</th><th>Duration</th><th>Result</th></tr>
-<tr><td>Double-tap BOOT</td><td>2 quick taps</td><td>Toggle display on/off (saved to NVS)</td></tr>
-</table>
+<p>Headless serial bridge. No button actions assigned. Serial port is dedicated to KISS protocol at 921600 baud.</p>
 
 <h2 id="pairing">BLE Pairing</h2>
 <ol>
@@ -488,6 +485,9 @@ pio run -e client_c3 -t upload --upload-port COM24</code></pre>
 <tr><td>Двойное нажатие BOOT</td><td>2 быстрых нажатия</td><td>Вкл/выкл дисплей и светодиоды (сохраняется)</td></tr>
 <tr><td>Удержание BOOT</td><td>5+ секунд</td><td>Сброс к заводским настройкам</td></tr>
 </table>
+
+<h3>UART клиент</h3>
+<p>Работает в безголовом режиме (headless). Кнопки не используются. Последовательный порт выделен для протокола KISS на скорости 921600 бод.</p>
 
 <h2 id="pairing-ru">Сопряжение BLE</h2>
 <ol>

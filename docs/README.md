@@ -200,9 +200,7 @@ Release builds use LOG_WARNING level (minimal output). Debug builds use LOG_TRAC
 
 ### UART Client (main_uart_client.cpp)
 
-| Action | Duration | Result |
-|--------|----------|--------|
-| Double-tap BOOT | 2 quick taps | Toggle display on/off (persisted) |
+The UART client is designed as a headless serial bridge. No button actions are assigned. The serial port is dedicated to KISS protocol communication with the host at 921600 baud.
 
 ## BLE Pairing
 
