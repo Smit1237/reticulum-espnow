@@ -1,5 +1,40 @@
 # Changelog
 
+## v1.1.0 -- Event-Driven Loops & CI Automation
+
+### Performance
+- **Event-driven main loops** for all three firmware types:
+  - Client: blocks on ESP-NOW RX queue with 50ms timeout (xQueueReceive)
+  - UART client: same pattern with 10ms timeout for serial throughput
+  - Retranslator: binary semaphore on ESPNOWInterface, signaled from ISR
+- CPU sleeps while idle, wakes instantly on mesh data arrival
+- Removed all `delay(1)` polling from loops
+
+### Build Quality
+- **Zero compiler warnings** across all targets (C3, S3, ESP32, T-Display)
+- Fixed `DISPLAY_TYPE` redefinition warning (DisplayTypes.h default removed)
+- Renamed KISS protocol constants to avoid build flag conflicts (`KISS_MCU_ESP32`, `KISS_PLATFORM_ESP32`)
+- Removed deprecated `NimBLEService::start()` call (NimBLE 2.x)
+- Fixed volatile increment deprecation (C++20) in ESPNOWInterface
+- C++-only warning flags moved to CXXFLAGS via extra_script.py
+
+### Display Fixes
+- Fixed ST7789 boot screen leftover text (`_needsClear` one-shot clear flag)
+
+### CI/CD
+- **Automated gh-pages deploy**: new `deploy` job in release workflow
+  - Copies firmware binaries to `firmware/<version>/` on gh-pages
+  - Generates `firmware/versions.json` manifest automatically
+  - Updates flasher HTML from source branch
+- **Web flasher version selector**: users can pick any released firmware version
+  - Cascading dropdowns: Version -> Type -> Board
+  - Falls back to GitHub API if versions.json not yet deployed
+
+### Infrastructure
+- ESPNOWInterface: added `_rx_notify` semaphore with `waitForData()` for external consumers
+
+---
+
 ## v1.0.0 -- Initial Release
 
 ### Firmware Types
