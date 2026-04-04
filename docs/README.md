@@ -29,7 +29,7 @@ All nodes communicate over ESP-NOW v2.0 with 802.11 Long Range mode, achieving u
 | ESP32-S3 DevKitC | ESP32-S3 | None | 5.0 | Yes | Yes | Yes |
 | ESP32 DevKit | ESP32 | None | 4.2 | Yes | Yes | Yes |
 | ESP32-WROVER DevKit | ESP32 | None | 4.2 | Yes | Yes (4MB PSRAM) | Yes |
-| ESP32-CAM | ESP32 | None | 4.2 | Yes | No | No |
+| ESP32-CAM | ESP32 | None | 4.2 | Yes | Yes (2MB PSRAM) | Yes |
 | ESP32-C6 DevKitC | ESP32-C6 | None | 5.0 | Yes | Yes | Yes |
 | ESP32-S2 Saola | ESP32-S2 | None | No | No | Yes | Yes |
 
@@ -349,6 +349,7 @@ If power is lost during first boot, the device will boot normally on the next at
 | client_tdisplay | T-Display | ST7789 TFT | Color display |
 | client_s3 | ESP32-S3 | None | RGB NeoPixel LED, dual serial |
 | client_esp32 | ESP32 | None | Classic ESP32 |
+| client_espcam | ESP32-CAM | None | Camera not used, 2MB PSRAM |
 | client_c6 | ESP32-C6 | None | WiFi 6 capable |
 
 ### Retranslator (Transport Node)
@@ -365,6 +366,8 @@ If power is lost during first boot, the device will boot normally on the next at
 | retranslator_esp32_debug | ESP32 | None | 128 | Verbose logging |
 | retranslator_wrover | ESP32-WROVER | None | 4096 | 4MB quad PSRAM |
 | retranslator_wrover_debug | ESP32-WROVER | None | 4096 | Verbose logging |
+| retranslator_espcam | ESP32-CAM | None | 1024 | 2MB PSRAM, camera unused |
+| retranslator_espcam_debug | ESP32-CAM | None | 1024 | Verbose logging |
 | retranslator_c6 | ESP32-C6 | None | 48 | WiFi 6 |
 | retranslator_s2 | ESP32-S2 | None | 48 | No BLE, relay only |
 
