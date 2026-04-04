@@ -14,6 +14,7 @@ using namespace RNS;
 // Static member initialization
 QueueHandle_t ESPNOWInterface::_rx_queue = nullptr;
 uint8_t ESPNOWInterface::_local_mac[6] = {0};
+volatile uint32_t ESPNOWInterface::_rx_drops = 0;
 
 // Broadcast MAC address
 static const uint8_t BROADCAST_ADDR[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -175,6 +176,8 @@ void ESPNOWInterface::on_incoming(const Bytes& data) {
 	pkt.len = (uint16_t)data_len;
 	memcpy(pkt.data, data, data_len);
 
-	// Non-blocking queue send — drop packet if queue is full
-	xQueueSendFromISR(_rx_queue, &pkt, nullptr);
+	// Non-blocking queue send — track drops if queue is full
+	if (xQueueSendFromISR(_rx_queue, &pkt, nullptr) != pdTRUE) {
+		_rx_drops++;
+	}
 }

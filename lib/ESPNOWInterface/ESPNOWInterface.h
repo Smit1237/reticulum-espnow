@@ -47,4 +47,9 @@ private:
 
 	// Local MAC for filtering own packets
 	static uint8_t _local_mac[6];
+
+	// RX queue drop counter
+	static volatile uint32_t _rx_drops;
+public:
+	static uint32_t rxDrops() { return _rx_drops; }
 };

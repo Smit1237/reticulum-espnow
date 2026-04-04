@@ -59,7 +59,7 @@ inline void led_reset() {
 #ifdef LED_RGB_PIN
 	neopixelWrite(LED_RGB_PIN, 8, 0, 0);  // red = factory reset
 #elif LED_USER_PIN >= 0
-	digitalWrite(LED_USER_PIN, HIGH);
+	digitalWrite(LED_USER_PIN, LED_ON_STATE);
 #endif
 }
 
@@ -127,6 +127,17 @@ void first_boot_init() {
 	Serial.println("\r\n=== FIRST BOOT — Initializing ===\r\n");
 	Display::showBootScreen("FIRST BOOT", "initializing...");
 
+	// Mark initialized FIRST — if power is lost after format but before
+	// this flag, the device would loop formatting forever. By setting the
+	// flag first, a power-loss just means we boot normally with an empty
+	// filesystem, which self-heals (Reticulum generates a new identity).
+	mark_initialized();
+
+	// Set default display state
+	prefs.begin(NVS_NAMESPACE, false);
+	prefs.putBool(NVS_DISPLAY, true);
+	prefs.end();
+
 	// Format filesystem for clean slate
 	Serial.println("Formatting filesystem...\r\n");
 	microStore::FileSystem filesystem{microStore::Adapters::LittleFSFileSystem()};
@@ -136,7 +147,7 @@ void first_boot_init() {
 	// Re-init after format
 	if (!filesystem.init()) {
 		Serial.println("ERROR: filesystem init failed after format!\r\n");
-		return;
+		ESP.restart();
 	}
 	RNS::Utilities::OS::register_filesystem(filesystem);
 
@@ -149,16 +160,6 @@ void first_boot_init() {
 
 	// Persist transport data (identity saved to filesystem)
 	RNS::Transport::persist_data();
-
-	Serial.println("Transport identity created and saved.\r\n");
-
-	// Mark as initialized
-	mark_initialized();
-
-	// Set default display state
-	prefs.begin(NVS_NAMESPACE, false);
-	prefs.putBool(NVS_DISPLAY, true);
-	prefs.end();
 
 	Serial.println("First boot complete. Rebooting into normal mode...\r\n");
 	Display::showBootScreen("FIRST BOOT", "done, rebooting");

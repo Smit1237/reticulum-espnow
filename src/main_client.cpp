@@ -125,8 +125,8 @@ struct espnow_rx_pkt_t {
 };
 static QueueHandle_t espnow_rx_queue = nullptr;
 
-static uint32_t tx_count = 0;
-static uint32_t rx_count = 0;
+static volatile uint32_t tx_count = 0;
+static volatile uint32_t rx_count = 0;
 
 // KISS parser state
 static uint8_t  kiss_buf[ESPNOW_MAX_PAYLOAD];
