@@ -31,6 +31,8 @@
 | ESP32-C6 DevKitC | ESP32-C6 | Нет | 5.0 | Да | Да | Да |
 | ESP32-S2 Saola | ESP32-S2 | Нет | Нет | Нет | Да | Да |
 
+Примечание: на платах ESP32-S3 DevKitC встроенный RGB NeoPixel LED (GPIO 48) требует замыкания паяльной перемычки. Найдите маленькую площадку с маркировкой "RGB" рядом со светодиодом и замкните её припоем. Без этого светодиод работать не будет.
+
 Варианты ретранслятора ESP32-S3 с PSRAM:
 - **N16R8 / N8R8** (8 МБ octal PSRAM): до 4096 маршрутов
 - **N4R2 / N8R2 / N16R2** (2 МБ quad PSRAM): до 1024 маршрутов
@@ -40,9 +42,46 @@
 
 ### Необходимое ПО
 
-- PlatformIO CLI или IDE
+- PlatformIO CLI (v6.1+) или VS Code с расширением PlatformIO
 - USB кабель для целевой платы
 - Для BLE клиента: телефон Android с приложением Sideband или Columba
+
+### Платформа PlatformIO: pioarduino
+
+Проект требует форк **pioarduino** платформы Espressif 32. Официальная платформа PlatformIO `espressif32` использует Arduino Core 2.x / ESP-IDF 4.x, который не поддерживает ESP-NOW v2.0 (полезная нагрузка 1470 байт). Форк pioarduino предоставляет Arduino Core 3.x на ESP-IDF 5.5 с полной поддержкой ESP-NOW v2.
+
+Платформа настраивается автоматически в `platformio.ini`:
+
+```ini
+platform = https://github.com/pioarduino/platform-espressif32/releases/download/stable/platform-espressif32.zip
+```
+
+PlatformIO скачивает и устанавливает её автоматически при первой сборке. В большинстве случаев ручная установка не требуется.
+
+#### Установка тулчейна (если автоустановка не работает)
+
+На некоторых системах (особенно Windows с MSYS2/MinGW) автоматическая установка тулчейна может завершиться ошибкой:
+
+```
+ERROR: MSys/Mingw is not supported
+idf_tools.py installation failed
+```
+
+**Исправление для RISC-V (ESP32-C3, ESP32-C6):**
+
+1. Скачайте тулчейн вручную с https://github.com/espressif/crosstool-NG/releases
+2. Распакуйте в каталог PlatformIO packages:
+   ```bash
+   # Windows
+   cd %USERPROFILE%\.platformio\packages\toolchain-riscv32-esp
+   # Распакуйте и переместите содержимое на один уровень вверх
+   cp -r riscv32-esp-elf/* .
+   ```
+3. Проверьте: `bin/riscv32-esp-elf-g++ --version`
+
+**Для Xtensa (ESP32, ESP32-S2, ESP32-S3):** аналогично, но скачайте `xtensa-esp-elf` и распакуйте в `toolchain-xtensa-esp-elf/`.
+
+**Linux/macOS:** автоматическая установка обычно работает без проблем.
 
 ### Сборка
 

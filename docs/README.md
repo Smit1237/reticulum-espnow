@@ -31,6 +31,8 @@ All nodes communicate over ESP-NOW v2.0 with 802.11 Long Range mode, achieving u
 | ESP32-C6 DevKitC | ESP32-C6 | None | 5.0 | Yes | Yes | Yes |
 | ESP32-S2 Saola | ESP32-S2 | None | No | No | Yes | Yes |
 
+Note: ESP32-S3 DevKitC boards have an onboard RGB NeoPixel LED (GPIO 48) that requires a solder bridge to be closed. Look for a small pad labeled "RGB" near the LED on the board and bridge it with solder. Without this, the LED will not function.
+
 ESP32-S3 retranslator variants with PSRAM:
 - **N16R8 / N8R8** (8MB octal PSRAM): up to 4096 paths
 - **N4R2 / N8R2 / N16R2** (2MB quad PSRAM): up to 1024 paths
@@ -40,9 +42,72 @@ ESP32-S3 retranslator variants with PSRAM:
 
 ### Prerequisites
 
-- PlatformIO CLI or IDE
+- PlatformIO CLI (v6.1+) or VS Code with PlatformIO extension
 - USB cable for the target board
 - For BLE client: Android phone with Sideband or Columba app
+
+### PlatformIO Platform: pioarduino
+
+This project requires the **pioarduino** fork of the Espressif 32 platform. The official PlatformIO `espressif32` platform is stuck on Arduino Core 2.x / ESP-IDF 4.x, which does not support ESP-NOW v2.0 (1470-byte payloads). The pioarduino fork provides Arduino Core 3.x on ESP-IDF 5.5, which includes full ESP-NOW v2 support.
+
+The platform is configured automatically in `platformio.ini`:
+
+```ini
+platform = https://github.com/pioarduino/platform-espressif32/releases/download/stable/platform-espressif32.zip
+```
+
+PlatformIO downloads and installs this automatically on first build. No manual installation is needed in most cases.
+
+#### Toolchain Setup (if automatic install fails)
+
+On some systems (particularly Windows with MSYS2/MinGW), the automatic toolchain installation may fail with:
+
+```
+ERROR: MSys/Mingw is not supported
+idf_tools.py installation failed
+```
+
+**Fix for RISC-V targets (ESP32-C3, ESP32-C6):**
+
+1. Download the toolchain manually:
+   - Visit https://github.com/espressif/crosstool-NG/releases
+   - Download `riscv32-esp-elf-14.2.0_XXXXXXXX-x86_64-w64-mingw32.zip` (Windows) or the appropriate archive for your OS
+2. Extract to the PlatformIO packages directory:
+   ```bash
+   # Windows
+   cd %USERPROFILE%\.platformio\packages\toolchain-riscv32-esp
+   # Extract archive contents here, then move files up one level:
+   # The archive extracts to riscv32-esp-elf/ subdirectory
+   # Copy contents of riscv32-esp-elf/* to the current directory
+   cp -r riscv32-esp-elf/* .
+   ```
+3. Verify: `bin/riscv32-esp-elf-g++ --version` should work
+
+**Fix for Xtensa targets (ESP32, ESP32-S2, ESP32-S3):**
+
+Same process but download `xtensa-esp-elf-14.2.0_XXXXXXXX-x86_64-w64-mingw32.zip` and extract to `toolchain-xtensa-esp-elf/`.
+
+**Linux/macOS:** The automatic installation usually works. If it fails, use the same manual download approach with the appropriate archive for your platform.
+
+#### Verifying Installation
+
+```bash
+# Should show pioarduino platform version
+pio run -e client_c3 --list-targets
+
+# First build downloads all dependencies (may take several minutes)
+pio run -e client_c3
+```
+
+Expected platform output:
+```
+PLATFORM: Espressif 32 (55.x.x) > ...
+PACKAGES:
+  framework-arduinoespressif32 @ 3.3.x
+  framework-arduinoespressif32-libs @ 5.5.x
+```
+
+If the framework version shows 2.x instead of 3.x, the pioarduino platform was not installed correctly.
 
 ### Build
 

@@ -126,10 +126,12 @@ footer { text-align: center; color: var(--dim); padding: 30px 0; font-size: 0.8e
 
 <h3>Prerequisites</h3>
 <ul>
-<li>PlatformIO CLI or VS Code with PlatformIO extension</li>
+<li>PlatformIO CLI (v6.1+) or VS Code with PlatformIO extension</li>
 <li>USB cable for the target board</li>
 <li>For BLE client: Android phone with Sideband or Columba</li>
 </ul>
+
+<div class="note"><strong>pioarduino Platform Required</strong> -- This project uses the <a href="https://github.com/pioarduino/platform-espressif32" style="color:var(--accent)">pioarduino</a> fork of the Espressif 32 platform (Arduino Core 3.x / ESP-IDF 5.5) for ESP-NOW v2.0 support (1470-byte payloads). The official PlatformIO platform does not support ESP-NOW v2. The fork is configured in <code>platformio.ini</code> and downloaded automatically on first build. If the toolchain install fails on Windows (MSYS2/MinGW), download manually from <a href="https://github.com/espressif/crosstool-NG/releases" style="color:var(--accent)">espressif/crosstool-NG</a>. See full docs for details.</div>
 
 <h3>Build and Flash</h3>
 <pre><code># Build for ESP32-C3 BLE client (default)
@@ -450,6 +452,9 @@ pio device monitor</code></pre>
 <p>Аналогичен BLE клиенту, но взаимодействует через USB Serial на скорости 921600 бод. Для подключения ПК или ноутбука с Reticulum напрямую через USB кабель.</p>
 
 <h2 id="quickstart-ru">Быстрый старт</h2>
+
+<div class="note"><strong>Требуется платформа pioarduino</strong> -- Проект использует форк <a href="https://github.com/pioarduino/platform-espressif32" style="color:var(--accent)">pioarduino</a> платформы Espressif 32 (Arduino Core 3.x / ESP-IDF 5.5) для поддержки ESP-NOW v2.0 (1470 байт). Официальная платформа PlatformIO не поддерживает ESP-NOW v2. Форк настроен в <code>platformio.ini</code> и загружается автоматически. При ошибке установки тулчейна на Windows (MSYS2/MinGW) скачайте вручную с <a href="https://github.com/espressif/crosstool-NG/releases" style="color:var(--accent)">espressif/crosstool-NG</a>. Подробности в полной документации.</div>
+
 <pre><code># Сборка для ESP32-C3 BLE клиента
 pio run -e client_c3
 
