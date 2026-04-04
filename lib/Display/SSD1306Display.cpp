@@ -48,7 +48,7 @@ void showBootScreen(const char* name, const char* subtitle) {
 }
 
 void showStatus(bool connected, const char* name,
-                unsigned long tx, unsigned long rx, unsigned long freeHeap) {
+                unsigned long tx, unsigned long rx, float tempC) {
 	if (!_displayOn) return;
 
 	char buf[20];
@@ -71,8 +71,8 @@ void showStatus(bool connected, const char* name,
 	snprintf(buf, sizeof(buf), "RX: %lu", rx);
 	u8g2.drawStr(0, 27, buf);
 
-	// Row 4: heap
-	snprintf(buf, sizeof(buf), "heap:%lu", freeHeap);
+	// Row 4: temperature
+	snprintf(buf, sizeof(buf), "%.1f C", tempC);
 	u8g2.drawStr(0, 37, buf);
 
 	u8g2.sendBuffer();

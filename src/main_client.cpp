@@ -407,8 +407,13 @@ void updateDisplay() {
 	if (pairingMode && !bleConnected) {
 		Display::showPairingMode(bleName);
 	} else {
-		Display::showStatus(bleConnected, bleName, tx_count, rx_count,
-		                    (unsigned long)ESP.getFreeHeap());
+		static float last_temp = 0;
+		static unsigned long last_temp_read = 0;
+		if (millis() - last_temp_read > 5000) {
+			last_temp = temperatureRead();
+			last_temp_read = millis();
+		}
+		Display::showStatus(bleConnected, bleName, tx_count, rx_count, last_temp);
 	}
 }
 

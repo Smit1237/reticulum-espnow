@@ -47,7 +47,7 @@ void showBootScreen(const char* name, const char* subtitle) {
 }
 
 void showStatus(bool connected, const char* name,
-                unsigned long tx, unsigned long rx, unsigned long freeHeap) {
+                unsigned long tx, unsigned long rx, float tempC) {
 	if (!_displayOn) return;
 
 	tft.fillScreen(BG_COLOR);
@@ -80,9 +80,9 @@ void showStatus(bool connected, const char* name,
 
 	tft.setTextColor(LABEL_COLOR, BG_COLOR);
 	tft.setCursor(4, 86);
-	tft.print("heap: ");
-	tft.setTextColor(TEXT_COLOR, BG_COLOR);
-	tft.print(freeHeap);
+	char tbuf[10];
+	snprintf(tbuf, sizeof(tbuf), "%.1f C", tempC);
+	tft.print(tbuf);
 
 	// BLE status on right side
 	tft.setTextColor(connected ? CONN_COLOR : DISCONN_COLOR, BG_COLOR);

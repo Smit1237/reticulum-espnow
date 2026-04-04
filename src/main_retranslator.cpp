@@ -71,12 +71,19 @@ RNS::Interface espnow_interface({RNS::Type::NONE});
 static size_t last_rxb = 0;
 static size_t last_txb = 0;
 
+static float chip_temp = 0;
+static unsigned long last_temp_read = 0;
+
 void updateDisplay() {
 	if (!Display::isOn()) return;
+	if (millis() - last_temp_read > 5000) {
+		chip_temp = temperatureRead();
+		last_temp_read = millis();
+	}
 	Display::showStatus(true, "TRANSPORT",
 	                    (unsigned long)espnow_interface.txb(),
 	                    (unsigned long)espnow_interface.rxb(),
-	                    (unsigned long)ESP.getFreeHeap());
+	                    chip_temp);
 }
 
 // =============== First boot / Factory reset ===============
