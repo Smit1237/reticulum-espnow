@@ -284,22 +284,36 @@ void setup() {
 	updateDisplay();
 }
 
-// =============== LOOP ===============
+// =============== LOOP (event-driven) ===============
+//
+// Block on ESP-NOW RX queue with short timeout. CPU sleeps while idle,
+// wakes instantly on mesh data. UART RX and housekeeping (buttons,
+// display) run at the housekeeping rate during idle periods.
+
+#define HOUSEKEEPING_MS 10  // 10ms — fast enough for 921600 baud UART
 
 void loop() {
-	// UART RX -> KISS parser -> ESP-NOW
+	// --- Event wait: block until ESP-NOW packet or timeout ---
+	espnow_rx_pkt_t pkt;
+	bool gotPacket = (xQueueReceive(espnow_rx_queue, &pkt, pdMS_TO_TICKS(HOUSEKEEPING_MS)) == pdTRUE);
+
+	// --- Process ESP-NOW data (instant wake path) ---
+	if (gotPacket) {
+		rx_count++;
+		kiss_send_data(pkt.data, pkt.len);
+		// Drain any additional queued packets
+		while (xQueueReceive(espnow_rx_queue, &pkt, 0) == pdTRUE) {
+			rx_count++;
+			kiss_send_data(pkt.data, pkt.len);
+		}
+	}
+
+	// --- UART RX -> KISS parser -> ESP-NOW ---
 	while (Serial.available()) {
 		kiss_feed((uint8_t)Serial.read());
 	}
 
-	// ESP-NOW RX -> KISS DATA frame -> UART TX
-	espnow_rx_pkt_t pkt;
-	while (xQueueReceive(espnow_rx_queue, &pkt, 0) == pdTRUE) {
-		rx_count++;
-		kiss_send_data(pkt.data, pkt.len);
-	}
-
-	// BOOT button: double-tap = toggle display
+	// --- Button handling: double-tap = toggle display ---
 	static unsigned long lastTapAt = 0;
 	static bool btnDown = false;
 	static unsigned long btnDownAt = 0;
@@ -330,9 +344,7 @@ void loop() {
 		}
 	}
 
-	// Display update
+	// --- Periodic display update ---
 	static unsigned long lastDisp = 0;
 	if (millis() - lastDisp > 2000) { updateDisplay(); lastDisp = millis(); }
-
-	delay(1); // Let RTOS run idle task — prevents 100% CPU and overheating
 }

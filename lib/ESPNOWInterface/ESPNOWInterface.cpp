@@ -13,6 +13,7 @@ using namespace RNS;
 
 // Static member initialization
 QueueHandle_t ESPNOWInterface::_rx_queue = nullptr;
+SemaphoreHandle_t ESPNOWInterface::_rx_notify = nullptr;
 uint8_t ESPNOWInterface::_local_mac[6] = {0};
 volatile uint32_t ESPNOWInterface::_rx_drops = 0;
 
@@ -43,6 +44,11 @@ bool ESPNOWInterface::start() {
 			ERROR("ESP-NOW: failed to create RX queue");
 			return false;
 		}
+	}
+
+	// Create notification semaphore for event-driven loops
+	if (!_rx_notify) {
+		_rx_notify = xSemaphoreCreateBinary();
 	}
 
 	// Initialize WiFi in STA mode (required for ESP-NOW)
@@ -179,5 +185,12 @@ void ESPNOWInterface::on_incoming(const Bytes& data) {
 	// Non-blocking queue send — track drops if queue is full
 	if (xQueueSendFromISR(_rx_queue, &pkt, nullptr) != pdTRUE) {
 		_rx_drops++;
+	}
+
+	// Notify any task blocking on waitForData()
+	if (_rx_notify) {
+		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+		xSemaphoreGiveFromISR(_rx_notify, &xHigherPriorityTaskWoken);
+		portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 	}
 }

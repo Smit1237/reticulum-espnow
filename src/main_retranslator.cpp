@@ -292,9 +292,19 @@ void setup() {
 	updateDisplay();
 }
 
-// =============== Loop ===============
+// =============== Loop (event-driven) ===============
+//
+// Block on ESPNOWInterface notification semaphore with timeout.
+// CPU sleeps while idle, wakes instantly when mesh data arrives.
+// Transport::jobs() and housekeeping run at the timeout interval.
+
+#define HOUSEKEEPING_MS 50  // 50ms — balances responsiveness with CPU savings
 
 void loop() {
+	// --- Event wait: block until ESP-NOW data or timeout ---
+	ESPNOWInterface::waitForData(pdMS_TO_TICKS(HOUSEKEEPING_MS));
+
+	// --- Run Reticulum (processes queued packets + transport jobs) ---
 	reticulum.loop();
 
 	// NOTE: Periodic transport re-announce not implemented on C3 due to
@@ -302,7 +312,7 @@ void loop() {
 	// Single-hop ESP-NOW broadcast doesn't need it — all nodes hear initial announce.
 	// For multi-hop chains, use S3 retranslator which has more resources.
 
-	// BOOT button: double-tap = toggle display, hold 5s = factory reset
+	// --- Button handling: double-tap = toggle display, hold 5s = factory reset ---
 	static unsigned long lastTapAt = 0;
 	static bool btnDown = false;
 	static unsigned long btnDownAt = 0;
@@ -347,28 +357,26 @@ void loop() {
 		}
 	}
 
-	// Update display every 2 seconds
+	// --- Periodic display update ---
 	static unsigned long last_display = 0;
 	if (millis() - last_display > 2000) {
 		updateDisplay();
 		last_display = millis();
 	}
 
-	// LED: flash on packet activity (only when display is on)
+	// --- LED: flash on packet activity (only when display is on) ---
 	if (!Display::isOn()) { led_off(); }
 	else {
-	size_t cur_rxb = espnow_interface.rxb();
-	size_t cur_txb = espnow_interface.txb();
-	if (cur_rxb != last_rxb || cur_txb != last_txb) {
-		led_flash();
-		last_rxb = cur_rxb;
-		last_txb = cur_txb;
-	} else {
-		led_off();
+		size_t cur_rxb = espnow_interface.rxb();
+		size_t cur_txb = espnow_interface.txb();
+		if (cur_rxb != last_rxb || cur_txb != last_txb) {
+			led_flash();
+			last_rxb = cur_rxb;
+			last_txb = cur_txb;
+		} else {
+			led_off();
+		}
 	}
-	} // Display::isOn() gate
-
-	delay(1); // Let RTOS run idle task — prevents 100% CPU and overheating
 }
 
 int _write(int file, char *ptr, int len) {

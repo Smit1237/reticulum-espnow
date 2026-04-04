@@ -8,6 +8,7 @@
 #include <esp_wifi_types.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
+#include <freertos/semphr.h>
 
 #include <stdint.h>
 
@@ -50,6 +51,18 @@ private:
 
 	// RX queue drop counter
 	static volatile uint32_t _rx_drops;
+
+	// Binary semaphore: signaled from ISR when data arrives.
+	// External code can block on this for event-driven loops.
+	static SemaphoreHandle_t _rx_notify;
+
 public:
 	static uint32_t rxDrops() { return _rx_drops; }
+
+	// Wait for incoming data or timeout. Returns true if data is likely available.
+	// Use this in your main loop instead of delay() for event-driven operation.
+	static bool waitForData(TickType_t timeout) {
+		if (!_rx_notify) return false;
+		return xSemaphoreTake(_rx_notify, timeout) == pdTRUE;
+	}
 };
