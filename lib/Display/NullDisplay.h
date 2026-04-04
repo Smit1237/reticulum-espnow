@@ -5,7 +5,7 @@
 namespace Display {
 	inline void init() {}
 	inline void showBootScreen(const char*, const char*) {}
-	inline void showStatus(bool, const char*, unsigned long, unsigned long, float) {}
+	inline void showStatus(bool, const char*, unsigned long, unsigned long, float, float = -1, float = -1) {}
 	inline void showPairingMode(const char*) {}
 	inline void showPin(uint32_t) {}
 	inline void clear() {}

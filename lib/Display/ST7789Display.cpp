@@ -9,6 +9,7 @@
 
 static TFT_eSPI tft = TFT_eSPI();
 static bool _displayOn = true;
+static bool _needsClear = true;  // Clear screen on first status draw after boot/mode change
 
 // Color theme
 #define BG_COLOR      TFT_BLACK
@@ -44,11 +45,19 @@ void showBootScreen(const char* name, const char* subtitle) {
 	tft.setTextColor(LABEL_COLOR, BG_COLOR);
 	tft.setCursor(60, 80);
 	tft.print(subtitle);
+	_needsClear = true;  // Next showStatus() must clear boot leftovers
 }
 
 void showStatus(bool connected, const char* name,
-                unsigned long tx, unsigned long rx, float tempC) {
+                unsigned long tx, unsigned long rx, float tempC,
+                float cpu0, float cpu1) {
 	if (!_displayOn) return;
+
+	// One-shot clear after boot/pairing screen to wipe leftover content
+	if (_needsClear) {
+		tft.fillScreen(BG_COLOR);
+		_needsClear = false;
+	}
 
 	// Use text background color to overwrite old text (no full screen clear = no flicker)
 	// Row 1: connection indicator + name
@@ -67,12 +76,12 @@ void showStatus(bool connected, const char* name,
 
 	// Stats area
 	tft.setTextFont(2);
+	char buf[32];
 
 	tft.setTextColor(LABEL_COLOR, BG_COLOR);
 	tft.setCursor(4, 42);
 	tft.print("TX: ");
 	tft.setTextColor(TEXT_COLOR, BG_COLOR);
-	char buf[16];
 	snprintf(buf, sizeof(buf), "%-10lu", tx);
 	tft.print(buf);
 
@@ -83,14 +92,52 @@ void showStatus(bool connected, const char* name,
 	snprintf(buf, sizeof(buf), "%-10lu", rx);
 	tft.print(buf);
 
+	// Row 4: temperature + CPU load on the right
 	tft.setTextColor(LABEL_COLOR, BG_COLOR);
 	tft.setCursor(4, 86);
 	snprintf(buf, sizeof(buf), "%.1f C    ", tempC);
 	tft.print(buf);
+
+	// Row 5: CPU load per core (if provided)
+	if (cpu0 >= 0) {
+		tft.setCursor(4, 108);
+
+		if (cpu1 >= 0) {
+			// Dual core: "CPU: XX% / YY%"  (fixed width, color per value)
+			uint16_t c0color = (cpu0 > 80) ? TFT_RED : (cpu0 > 50) ? TFT_YELLOW : TFT_GREEN;
+			uint16_t c1color = (cpu1 > 80) ? TFT_RED : (cpu1 > 50) ? TFT_YELLOW : TFT_GREEN;
+
+			tft.setTextColor(LABEL_COLOR, BG_COLOR);
+			tft.print("CPU:");
+			tft.setTextColor(c0color, BG_COLOR);
+			snprintf(buf, sizeof(buf), "%3.0f", cpu0);
+			tft.print(buf);
+			tft.setTextColor(LABEL_COLOR, BG_COLOR);
+			tft.print("/");
+			tft.setTextColor(c1color, BG_COLOR);
+			snprintf(buf, sizeof(buf), "%3.0f", cpu1);
+			tft.print(buf);
+			tft.setTextColor(LABEL_COLOR, BG_COLOR);
+			tft.print("%     ");
+		} else {
+			// Single core: "CPU: XX%"
+			uint16_t c0color = (cpu0 > 80) ? TFT_RED : (cpu0 > 50) ? TFT_YELLOW : TFT_GREEN;
+
+			tft.setTextColor(LABEL_COLOR, BG_COLOR);
+			tft.print("CPU:");
+			tft.setTextColor(c0color, BG_COLOR);
+			snprintf(buf, sizeof(buf), "%3.0f", cpu0);
+			tft.print(buf);
+			tft.setTextColor(LABEL_COLOR, BG_COLOR);
+			tft.print("%          ");
+		}
+	}
 }
 
 void showPairingMode(const char* name) {
 	if (!_displayOn) return;
+
+	_needsClear = true;  // Status screen must clear after pairing mode
 
 	// Alternating border color for visual pairing indication
 	static bool blink = false;
@@ -123,6 +170,7 @@ void showPin(uint32_t pin) {
 	char pinStr[8];
 	snprintf(pinStr, sizeof(pinStr), "%06lu", (unsigned long)pin);
 
+	_needsClear = true;  // Status screen must clear after PIN display
 	tft.fillScreen(BG_COLOR);
 	tft.setTextFont(2);
 	tft.setTextColor(LABEL_COLOR, BG_COLOR);
