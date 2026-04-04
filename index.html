@@ -401,25 +401,29 @@ window.flashFirmware = async function() {
         log('Flash complete!');
         setStatus('Flash successful! Resetting...', 'ok');
 
+        // Hard reset: classic sequence matching esptool.py
+        // RTS controls EN (reset), DTR controls IO0 (boot mode)
+        // We need EN low->high pulse with IO0 high (normal boot, not bootloader)
         try {
-            await esploader.after('hard_reset');
+            await transport.setDTR(false);  // IO0 high (normal boot)
+            await transport.setRTS(true);   // EN low (hold reset)
+            await new Promise(r => setTimeout(r, 200));
+            await transport.setRTS(false);  // EN high (release reset)
+            await new Promise(r => setTimeout(r, 200));
+            // Disconnect serial so the port is released
+            await transport.disconnect();
+            log('Device reset and port released.');
         } catch (e) {
-            log('Auto-reset failed, trying manual RTS toggle...');
+            log('Reset sequence: ' + e.message);
+            try { await transport.disconnect(); } catch(_) {}
         }
 
-        // Force reset via RTS/DTR toggle (works on most USB-UART adapters)
-        try {
-            await transport.setDTR(false);
-            await transport.setRTS(true);
-            await new Promise(r => setTimeout(r, 100));
-            await transport.setRTS(false);
-            await new Promise(r => setTimeout(r, 100));
-        } catch (e) {
-            log('RTS toggle failed: ' + e.message);
-        }
-
-        log('Device reset. Done.');
         setStatus('Flash successful! Device running.', 'ok');
+        // Disable flash button since port is closed
+        document.getElementById('btn-connect').textContent = 'Connect';
+        document.getElementById('btn-connect').disabled = false;
+        esploader = null;
+        transport = null;
 
     } catch (e) {
         log('Flash failed: ' + e.message);
