@@ -100,14 +100,19 @@ let transport = null;
 let firmwareData = null;
 let detectedChip = null;
 
-// Chip name mapping from esptool-js to our naming
-const CHIP_MAP = {
-    'ESP32':    'esp32',
-    'ESP32-S2': 's2',
-    'ESP32-S3': 's3',
-    'ESP32-C3': 'c3',
-    'ESP32-C6': 'c6',
-};
+// Map detected chip string to our naming
+// esptool-js returns full descriptions like "ESP32-D0WD-V3 (revision 3)"
+// or "ESP32-C3 (revision 4)" — we match by prefix
+function chipToKey(chipStr) {
+    const s = chipStr.toUpperCase();
+    if (s.includes('ESP32-C3')) return 'c3';
+    if (s.includes('ESP32-C6')) return 'c6';
+    if (s.includes('ESP32-S2')) return 's2';
+    if (s.includes('ESP32-S3')) return 's3';
+    if (s.includes('ESP32-C2')) return null; // not supported
+    if (s.includes('ESP32'))   return 'esp32'; // classic ESP32 (must be last)
+    return null;
+}
 
 // All firmware definitions: env name -> { chip, type, label }
 const FIRMWARE_DB = {
@@ -245,7 +250,7 @@ function populateTypeDropdown() {
     sel.innerHTML = '<option value="">-- select firmware type --</option>';
     sel.disabled = false;
 
-    const chipKey = CHIP_MAP[detectedChip] || '';
+    const chipKey = chipToKey(detectedChip) || '';
     if (!chipKey) {
         sel.innerHTML = '<option value="">Unsupported chip: ' + detectedChip + '</option>';
         return;
@@ -283,7 +288,7 @@ window.updateFirmwareList = function() {
         return;
     }
 
-    const chipKey = CHIP_MAP[detectedChip] || '';
+    const chipKey = chipToKey(detectedChip) || '';
     let count = 0;
 
     sel.innerHTML = '<option value="">-- select board --</option>';
