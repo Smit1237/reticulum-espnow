@@ -132,3 +132,83 @@ jobs:
           body_path: CHANGELOG.md
           draft: false
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') }}
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout source (for flasher)
+        uses: actions/checkout@v4
+        with:
+          path: source
+
+      - name: Checkout gh-pages
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+
+      - name: Download firmware artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: firmware-*
+          merge-multiple: true
+
+      - name: Deploy firmware and update manifest
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          cd gh-pages
+
+          # Create version directory and copy binaries
+          mkdir -p "firmware/${VERSION}"
+          cp ../artifacts/*.bin "firmware/${VERSION}/"
+
+          # Generate SHA256 checksums
+          cd "firmware/${VERSION}"
+          sha256sum *.bin > SHA256SUMS.txt
+          cd ../..
+
+          # Copy latest flasher from source
+          cp ../source/flasher/index.html flasher/index.html
+          cp flasher/index.html index.html
+
+          # Generate versions.json by scanning firmware directories
+          python3 - << 'PYEOF'
+          import json, os, glob
+          from datetime import datetime
+
+          versions = []
+          firmware_dir = "firmware"
+          for d in sorted(glob.glob(os.path.join(firmware_dir, "v*")), reverse=True):
+              ver = os.path.basename(d)
+              bins = sorted([os.path.basename(f) for f in glob.glob(os.path.join(d, "*.bin"))])
+              if not bins:
+                  continue
+              # Use directory mtime as date
+              mtime = os.path.getmtime(d)
+              date_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
+              versions.append({"version": ver, "date": date_str, "files": bins})
+
+          manifest = {"latest": versions[0]["version"] if versions else "", "versions": versions}
+
+          with open(os.path.join(firmware_dir, "versions.json"), "w") as f:
+              json.dump(manifest, f, indent=2)
+
+          print(json.dumps(manifest, indent=2))
+          PYEOF
+
+      - name: Commit and push
+        run: |
+          cd gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --staged --quiet && echo "No changes to deploy" && exit 0
+          git commit -m "Deploy ${VERSION} firmware and update flasher"
+          git push
