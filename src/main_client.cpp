@@ -191,9 +191,10 @@ class ServerCB : public NimBLEServerCallbacks {
 			// Auth succeeded — now safe to optimize connection parameters
 			NimBLEServer* s = NimBLEDevice::getServer();
 
-			// Request fast connection interval for throughput
-			// min=7.5ms, max=15ms, latency=0, timeout=200ms (in 1.25ms units)
-			s->updateConnParams(bleConnHandle, 6, 12, 0, 200);
+			// Request faster connection interval for throughput
+			// min=15ms, max=30ms, latency=0, timeout=400ms (in 1.25ms units)
+			// Note: 7.5ms is too aggressive for ESP32 classic with WiFi+BLE coex
+			s->updateConnParams(bleConnHandle, 12, 24, 0, 400);
 
 			// Request 2M PHY on BLE 5.0 chips (C3, S3, C6)
 #if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32S3) || \
@@ -280,7 +281,16 @@ void ble_send(const uint8_t* data, size_t len) {
 		}
 
 		offset += chunk;
+
+		// Brief yield between fragments to let BLE controller drain
+		if (offset < len) delay(1);
 	}
+
+	// Yield after every send to prevent back-to-back notify() overload.
+	// Without this, rapid successive ble_send() calls (e.g. 4 handshake
+	// responses parsed from one BLE write) overflow NimBLE TX buffers
+	// and the phone never receives them.
+	delay(1);
 }
 
 // Build and send a simple KISS response: FEND CMD [bytes...] FEND
@@ -677,7 +687,11 @@ void loop() {
 
 	// --- Periodic housekeeping (runs at HOUSEKEEPING_MS intervals) ---
 	static unsigned long lastDisp = 0;
-	if (millis() - lastDisp > 2000) { updateDisplay(); lastDisp = millis(); }
+	if (millis() - lastDisp > 2000) {
+		updateDisplay();
+		Display::ensureBacklight();  // Detect if backlight was hijacked
+		lastDisp = millis();
+	}
 
 	if (showingPin && pairingPin > 0) {
 		static unsigned long lastPinPrint = 0;

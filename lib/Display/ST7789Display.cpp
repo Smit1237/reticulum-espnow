@@ -7,6 +7,15 @@
 #include <SPI.h>
 #include <TFT_eSPI.h>
 
+// GPIO 4 (TFT backlight on T-Display) is ADC2_CH0 on ESP32 classic.
+// The WiFi PHY blob uses SAR ADC2 internally for RF power detection,
+// which switches GPIO 4 from digital to RTC IO mux — killing the
+// backlight output. rtc_gpio_deinit() forces it back to digital mode.
+#if defined(CONFIG_IDF_TARGET_ESP32) && defined(TFT_BL_PIN)
+  #include <driver/rtc_io.h>
+  #define BL_IS_ADC2_PIN 1
+#endif
+
 static TFT_eSPI tft = TFT_eSPI();
 static bool _displayOn = true;
 static bool _needsClear = true;  // Clear screen on first status draw after boot/mode change
@@ -20,19 +29,38 @@ static bool _needsClear = true;  // Clear screen on first status draw after boot
 #define PIN_COLOR     TFT_CYAN
 #define PAIR_COLOR    TFT_YELLOW
 
+// Force backlight pin back to digital GPIO mode.
+// On ESP32 classic, WiFi PHY can switch ADC2 pins (including GPIO 4)
+// to RTC IO mux, disconnecting the digital output driver.
+static void backlightOn() {
+#ifdef TFT_BL_PIN
+	if (TFT_BL_PIN < 0) return;
+  #ifdef BL_IS_ADC2_PIN
+	rtc_gpio_deinit((gpio_num_t)TFT_BL_PIN);  // RTC mux → digital GPIO mux
+  #endif
+	pinMode(TFT_BL_PIN, OUTPUT);
+	digitalWrite(TFT_BL_PIN, HIGH);
+#endif
+}
+
+static void backlightOff() {
+#ifdef TFT_BL_PIN
+	if (TFT_BL_PIN < 0) return;
+  #ifdef BL_IS_ADC2_PIN
+	rtc_gpio_deinit((gpio_num_t)TFT_BL_PIN);
+  #endif
+	pinMode(TFT_BL_PIN, OUTPUT);
+	digitalWrite(TFT_BL_PIN, LOW);
+#endif
+}
+
 namespace Display {
 
 void init() {
 	tft.init();
 	tft.setRotation(1);  // Landscape: 240x135
 	tft.fillScreen(BG_COLOR);
-
-#ifdef TFT_BL_PIN
-	if (TFT_BL_PIN >= 0) {
-		pinMode(TFT_BL_PIN, OUTPUT);
-		digitalWrite(TFT_BL_PIN, HIGH);
-	}
-#endif
+	backlightOn();
 }
 
 void showBootScreen(const char* name, const char* subtitle) {
@@ -151,9 +179,17 @@ void clear() {
 
 void setPowerSave(bool on) {
 	_displayOn = !on;
-#ifdef TFT_BL_PIN
-	if (TFT_BL_PIN >= 0) {
-		digitalWrite(TFT_BL_PIN, on ? LOW : HIGH);
+	if (on) backlightOff(); else backlightOn();
+}
+
+// Re-assert backlight if WiFi PHY reconfigured GPIO 4 via ADC2/RTC mux.
+// Only needed on ESP32 classic where GPIO 4 = ADC2_CH0.
+void ensureBacklight() {
+	if (!_displayOn) return;
+#ifdef BL_IS_ADC2_PIN
+	// Check if the pin was hijacked — digital read returns LOW even though we set HIGH
+	if (digitalRead(TFT_BL_PIN) == LOW) {
+		backlightOn();
 	}
 #endif
 }

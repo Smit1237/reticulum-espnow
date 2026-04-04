@@ -10,5 +10,6 @@ namespace Display {
 	inline void showPin(uint32_t) {}
 	inline void clear() {}
 	inline void setPowerSave(bool) {}
+	inline void ensureBacklight() {}
 	inline bool isOn() { return false; }
 }
