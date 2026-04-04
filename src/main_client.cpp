@@ -110,7 +110,7 @@ static uint16_t bleMTU = 20;         // Negotiated MTU (updated in callback)
 static uint16_t bleConnHandle = 0;   // Connection handle for param updates
 
 // BLE RX ring buffer
-#define BLE_RX_BUF_SIZE 2048
+#define BLE_RX_BUF_SIZE 6144
 static uint8_t  bleRxBuf[BLE_RX_BUF_SIZE];
 static volatile size_t bleRxHead = 0;
 static volatile size_t bleRxTail = 0;
@@ -196,14 +196,18 @@ class ServerCB : public NimBLEServerCallbacks {
 			// Note: 7.5ms is too aggressive for ESP32 classic with WiFi+BLE coex
 			s->updateConnParams(bleConnHandle, 12, 24, 0, 400);
 
+			// Request Data Length Extension (DLE): 251 bytes vs default 27
+			// Allows ~10x fewer link-layer packets per notification
+			s->setDataLen(bleConnHandle, 251);
+
 			// Request 2M PHY on BLE 5.0 chips (C3, S3, C6)
 #if defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32S3) || \
     defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32H2)
 			uint8_t phyMask = BLE_GAP_LE_PHY_1M_MASK | BLE_GAP_LE_PHY_2M_MASK;
 			s->updatePhy(bleConnHandle, phyMask, phyMask, 0);
-			Serial.println("BLE: requested fast params + 2M PHY");
+			Serial.println("BLE: optimized (fast params + DLE + 2M PHY)");
 #else
-			Serial.println("BLE: requested fast params");
+			Serial.println("BLE: optimized (fast params + DLE)");
 #endif
 		}
 		updateDisplay();
@@ -282,15 +286,15 @@ void ble_send(const uint8_t* data, size_t len) {
 
 		offset += chunk;
 
-		// Brief yield between fragments to let BLE controller drain
-		if (offset < len) delay(1);
+		// Yield between fragments to let BLE controller schedule the packet
+		if (offset < len) vTaskDelay(1);
 	}
 
 	// Yield after every send to prevent back-to-back notify() overload.
 	// Without this, rapid successive ble_send() calls (e.g. 4 handshake
-	// responses parsed from one BLE write) overflow NimBLE TX buffers
-	// and the phone never receives them.
-	delay(1);
+	// responses parsed from one BLE write) overflow NimBLE TX buffers.
+	// vTaskDelay(1) = one RTOS tick (~1ms) — minimal but sufficient.
+	vTaskDelay(1);
 }
 
 // Build and send a simple KISS response: FEND CMD [bytes...] FEND
@@ -353,7 +357,7 @@ void handle_kiss_frame() {
 			} else {
 				Serial.printf("ESP-NOW TX FAIL 0x%X\r\n", err);
 			}
-			delay(2);
+			// esp_now_send() is async — no delay needed before signaling READY
 			kiss_respond1(CMD_READY, 0x01);
 		}
 		break;
@@ -383,14 +387,11 @@ void handle_kiss_frame() {
 	case CMD_TXPOWER:
 	case CMD_SF:
 	case CMD_CR:
-		// Radio config ACK — silent
-		delay(5);
+		// Radio config ACK — echo back (ESP-NOW has no tunable radio params)
 		kiss_respond(kiss_cmd, kiss_buf, kiss_len);
 		break;
 
 	case CMD_RADIO_STATE:
-		// Radio state — silent
-		delay(5);
 		kiss_respond1(CMD_RADIO_STATE, kiss_len > 0 ? kiss_buf[0] : 0x01);
 		break;
 
@@ -589,7 +590,7 @@ void setup() {
 // Housekeeping interval — how often we check buttons, display, BLE RX
 // when no ESP-NOW data is arriving. Lower = more responsive buttons
 // but slightly more CPU. 50ms = 20Hz housekeeping.
-#define HOUSEKEEPING_MS 50
+#define HOUSEKEEPING_MS 10
 
 void loop() {
 	// --- Event wait: block until ESP-NOW packet or timeout ---

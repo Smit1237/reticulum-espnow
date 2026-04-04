@@ -133,7 +133,6 @@ void handle_kiss_frame() {
 		if (kiss_len > 0) {
 			esp_err_t err = esp_now_send(BROADCAST_ADDR, kiss_buf, kiss_len);
 			if (err == ESP_OK) tx_count++;
-			delay(2);
 			kiss_respond1(CMD_READY, 0x01);
 		}
 		break;
@@ -163,12 +162,10 @@ void handle_kiss_frame() {
 	case CMD_TXPOWER:
 	case CMD_SF:
 	case CMD_CR:
-		delay(5);
 		kiss_respond(kiss_cmd, kiss_buf, kiss_len);
 		break;
 
 	case CMD_RADIO_STATE:
-		delay(5);
 		kiss_respond1(CMD_RADIO_STATE, kiss_len > 0 ? kiss_buf[0] : 0x01);
 		break;
 
@@ -346,5 +343,9 @@ void loop() {
 
 	// --- Periodic display update ---
 	static unsigned long lastDisp = 0;
-	if (millis() - lastDisp > 2000) { updateDisplay(); lastDisp = millis(); }
+	if (millis() - lastDisp > 2000) {
+		updateDisplay();
+		Display::ensureBacklight();
+		lastDisp = millis();
+	}
 }

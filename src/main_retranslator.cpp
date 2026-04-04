@@ -361,6 +361,7 @@ void loop() {
 	static unsigned long last_display = 0;
 	if (millis() - last_display > 2000) {
 		updateDisplay();
+		Display::ensureBacklight();
 		last_display = millis();
 	}
 
