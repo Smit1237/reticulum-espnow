@@ -1,5 +1,41 @@
 # Changelog
 
+## v1.1.1 -- BLE Throughput & Stability
+
+### BLE Throughput
+- **MTU-aware notification fragmentation** -- payloads exceeding (MTU-3) bytes are split into chunks with retry on NimBLE TX buffer exhaustion. Previously, large ESP-NOW packets (up to 1470 bytes) were silently truncated to 509 bytes.
+- **Data Length Extension (DLE)** -- requests 251-byte link-layer PDUs (vs 27 default), reducing LL packets per notification by ~10x
+- **2M PHY negotiation** on BLE 5.0 chips (C3, S3, C6) -- doubles air-time speed
+- **Fast connection parameters** -- requests 15-30ms interval after auth (vs phone default 30-50ms)
+- **MTU 517** (up from 512) for proper 512-byte ATT payload support
+- **BLE RX buffer** increased to 6144 bytes (from 2048) matching RNode firmware
+- **Notify pacing** -- `vTaskDelay(1)` after each `ble_send()` prevents back-to-back notification overflow during handshake
+
+### Throughput Optimization
+- **Removed `delay(2)`** after `esp_now_send()` in BLE and UART clients -- send is async, delay was unnecessary (saves 2ms per TX packet)
+- **Removed `delay(5)`** from radio config ACK responses in both clients (saves 30ms during handshake)
+- **BLE client HOUSEKEEPING_MS** reduced from 50ms to 10ms -- worst-case outbound latency drops from 55ms to 15ms
+
+### BLE Connection Stability
+- Connection parameter and PHY updates **deferred to `onAuthenticationComplete`** instead of `onConnect` -- prevents disrupting pairing handshake
+- Connection params relaxed to 15-30ms (7.5ms caused supervision timeouts on ESP32 classic with WiFi+BLE coexistence)
+
+### T-Display Fixes
+- **Backlight GPIO 4 / ADC2 fix** -- WiFi PHY blob switches GPIO 4 (ADC2_CH0) from digital to RTC IO mux, killing backlight. Fixed with `rtc_gpio_deinit()` to force pad back to digital GPIO mode
+- **`ensureBacklight()` watchdog** on all three firmware types for T-Display target -- detects and restores hijacked backlight pin every 2 seconds
+- **Boot screen leftover fix** -- `_needsClear` one-shot flag clears screen on first status update after boot/pairing mode
+
+### UART Client
+- **Added LED helpers** with active-low support -- was completely missing LED control (inverted heartbeat, no power-off on display toggle)
+- **LED power management** -- LEDs turn off when display is toggled off, matching BLE client and retranslator behavior
+
+### Project
+- **MIT License** added
+- **Root README.md** rewritten with architecture diagram, hardware table, full build environment list, web flasher link, dependency licenses
+- **Documentation** updated for all v1.1.1 changes
+
+---
+
 ## v1.1.0 -- Event-Driven Loops & CI Automation
 
 ### Performance

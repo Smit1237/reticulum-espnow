@@ -74,6 +74,7 @@ footer { text-align: center; color: var(--dim); padding: 30px 0; font-size: 0.8e
 <a href="#reset">Factory Reset</a>
 <a href="#envs">Build Environments</a>
 <a href="#limits">Known Limitations</a>
+<a href="#performance">Performance</a>
 <a href="#troubleshooting">Troubleshooting</a>
 </nav>
 
@@ -178,7 +179,11 @@ pio device monitor</code></pre>
 </table>
 
 <h3>UART Client</h3>
-<p>Headless serial bridge. No button actions assigned. Serial port is dedicated to KISS protocol at 921600 baud.</p>
+<table>
+<tr><th>Action</th><th>Duration</th><th>Result</th></tr>
+<tr><td>Double-tap BOOT</td><td>2 quick taps</td><td>Toggle display + LEDs on/off (saved to NVS)</td></tr>
+</table>
+<p>LED flashes on packet activity (TX/RX). Serial port runs KISS protocol at 921600 baud.</p>
 
 <h2 id="pairing">BLE Pairing</h2>
 <ol>
@@ -371,6 +376,27 @@ pio device monitor</code></pre>
 <tr><td><code>uart_s2</code></td><td>ESP32-S2</td><td>None</td></tr>
 </table>
 
+<h2 id="performance">Performance</h2>
+
+<h3>Event-Driven Architecture</h3>
+<p>All firmware types use event-driven main loops instead of busy polling. The CPU sleeps during idle periods and wakes instantly when mesh data arrives:</p>
+<ul>
+<li><strong>BLE Client</strong> -- blocks on ESP-NOW RX queue (10ms timeout), 100Hz housekeeping</li>
+<li><strong>UART Client</strong> -- same pattern, 10ms timeout for 921600 baud serial</li>
+<li><strong>Retranslator</strong> -- blocks on ESPNOWInterface semaphore (50ms timeout)</li>
+</ul>
+
+<h3>BLE Throughput Optimization</h3>
+<table>
+<tr><th>Feature</th><th>Value</th><th>Effect</th></tr>
+<tr><td>MTU</td><td>517 bytes</td><td>509-byte notification payloads</td></tr>
+<tr><td>Data Length Extension</td><td>251 bytes</td><td>~10x fewer link-layer packets</td></tr>
+<tr><td>2M PHY</td><td>C3/S3/C6</td><td>Doubles air-time speed</td></tr>
+<tr><td>Connection interval</td><td>15-30ms</td><td>Faster than phone default</td></tr>
+<tr><td>Fragmentation</td><td>MTU-aware</td><td>Large packets split correctly</td></tr>
+</table>
+<p>Real-world BLE throughput with WiFi+BLE coexistence: 30-60 KB/s. This exceeds typical Reticulum traffic requirements.</p>
+
 <h2 id="limits">Known Limitations</h2>
 <ul>
 <li><strong>ESP32-C3 retranslator memory</strong> -- limited to small networks (up to 20 nodes) due to upstream microReticulum heap management issues under heavy announce traffic. Use ESP32-S3 with PSRAM for larger deployments.</li>
@@ -409,6 +435,7 @@ pio device monitor</code></pre>
 <a href="#displays-ru">Экраны</a>
 <a href="#reset-ru">Сброс настроек</a>
 <a href="#limits-ru">Ограничения</a>
+<a href="#performance-ru">Производительность</a>
 <a href="#troubleshooting-ru">Решение проблем</a>
 </nav>
 
@@ -499,7 +526,11 @@ pio run -e client_c3 -t upload --upload-port COM24</code></pre>
 </table>
 
 <h3>UART клиент</h3>
-<p>Работает в безголовом режиме (headless). Кнопки не используются. Последовательный порт выделен для протокола KISS на скорости 921600 бод.</p>
+<table>
+<tr><th>Действие</th><th>Длительность</th><th>Результат</th></tr>
+<tr><td>Двойное нажатие BOOT</td><td>2 быстрых нажатия</td><td>Вкл/выкл дисплей и светодиоды (сохраняется)</td></tr>
+</table>
+<p>Светодиод мигает при активности пакетов (TX/RX). Последовательный порт работает по протоколу KISS на 921600 бод.</p>
 
 <h2 id="pairing-ru">Сопряжение BLE</h2>
 <ol>
@@ -573,6 +604,27 @@ pio run -e client_c3 -t upload --upload-port COM24</code></pre>
 <li>Устройство перезагружается и генерирует новый идентификатор</li>
 </ol>
 <div class="warn">Операция необратима. Ретранслятор появится в сети как новый узел.</div>
+
+<h2 id="performance-ru">Производительность</h2>
+
+<h3>Событийная архитектура</h3>
+<p>Все типы прошивок используют событийные циклы. CPU спит в простое и мгновенно просыпается при поступлении данных:</p>
+<ul>
+<li><strong>BLE клиент</strong> -- блокировка на очереди ESP-NOW RX (таймаут 10 мс), 100 Гц обслуживание</li>
+<li><strong>UART клиент</strong> -- аналогично, таймаут 10 мс для 921600 бод</li>
+<li><strong>Ретранслятор</strong> -- блокировка на семафоре ESPNOWInterface (таймаут 50 мс)</li>
+</ul>
+
+<h3>Оптимизация BLE</h3>
+<table>
+<tr><th>Функция</th><th>Значение</th><th>Эффект</th></tr>
+<tr><td>MTU</td><td>517 байт</td><td>509 байт полезной нагрузки</td></tr>
+<tr><td>Data Length Extension</td><td>251 байт</td><td>~10x меньше LL-пакетов</td></tr>
+<tr><td>2M PHY</td><td>C3/S3/C6</td><td>Удвоение скорости в эфире</td></tr>
+<tr><td>Интервал соединения</td><td>15-30 мс</td><td>Быстрее дефолта телефона</td></tr>
+<tr><td>Фрагментация</td><td>С учетом MTU</td><td>Большие пакеты разбиваются корректно</td></tr>
+</table>
+<p>Реальная пропускная способность BLE при сосуществовании WiFi+BLE: 30-60 КБ/с.</p>
 
 <h2 id="limits-ru">Известные ограничения</h2>
 <ul>

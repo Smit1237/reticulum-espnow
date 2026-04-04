@@ -178,6 +178,10 @@ jobs:
           cp ../source/flasher/index.html flasher/index.html
           cp flasher/index.html index.html
 
+          # Copy HTML manual from source
+          mkdir -p docs
+          cp ../source/docs/manual.html docs/manual.html
+
           # Generate versions.json by scanning firmware directories
           python3 - << 'PYEOF'
           import json, os, glob

@@ -7,6 +7,38 @@
 #include <esp_now.h>
 #include <Preferences.h>
 
+// LED helpers — support GPIO (active high/low) and RGB NeoPixel
+#ifndef LED_ACTIVE_LOW
+  #define LED_ACTIVE_LOW 0
+#endif
+#define LED_ON_STATE  (LED_ACTIVE_LOW ? LOW : HIGH)
+#define LED_OFF_STATE (LED_ACTIVE_LOW ? HIGH : LOW)
+
+inline void led_on() {
+#ifdef LED_RGB_PIN
+	neopixelWrite(LED_RGB_PIN, 2, 2, 2);
+#elif LED_USER_PIN >= 0
+	digitalWrite(LED_USER_PIN, LED_ON_STATE);
+#endif
+}
+inline void led_off() {
+#ifdef LED_RGB_PIN
+	neopixelWrite(LED_RGB_PIN, 0, 0, 0);
+#elif LED_USER_PIN >= 0
+	digitalWrite(LED_USER_PIN, LED_OFF_STATE);
+#endif
+}
+inline void led_pwr_off() {
+#if LED_PWR_PIN >= 0
+	digitalWrite(LED_PWR_PIN, LED_OFF_STATE);
+#endif
+}
+inline void led_pwr_on() {
+#if LED_PWR_PIN >= 0
+	digitalWrite(LED_PWR_PIN, LED_ON_STATE);
+#endif
+}
+
 // ============================================================
 // KISS framing — RNodeInterface protocol over UART
 // ============================================================
@@ -246,6 +278,10 @@ void setup() {
 #if LED_USER_PIN >= 0
 	pinMode(LED_USER_PIN, OUTPUT);
 #endif
+#if LED_PWR_PIN >= 0
+	pinMode(LED_PWR_PIN, OUTPUT);
+#endif
+	led_on();
 	pinMode(BUTTON_BOOT_PIN, INPUT_PULLUP);
 
 	// Display init
@@ -253,7 +289,11 @@ void setup() {
 	prefs.begin("rnode", false);
 	bool displayOn = prefs.getBool("disp", true);
 	prefs.end();
-	if (!displayOn) Display::setPowerSave(true);
+	if (!displayOn) {
+		Display::setPowerSave(true);
+		led_off();
+		led_pwr_off();
+	}
 	Display::showBootScreen("UART Node", "booting...");
 
 	// ESP-NOW init
@@ -278,6 +318,7 @@ void setup() {
 	}
 
 	Display::showBootScreen("UART Node", "ready");
+	led_off();
 	updateDisplay();
 }
 
@@ -330,6 +371,14 @@ void loop() {
 			if (millis() - lastTapAt < 400) {
 				bool on = !Display::isOn();
 				Display::setPowerSave(!on);
+
+				if (!on) {
+					led_off();
+					led_pwr_off();
+				} else {
+					led_pwr_on();
+				}
+
 				prefs.begin("rnode", false);
 				prefs.putBool("disp", on);
 				prefs.end();
@@ -347,5 +396,18 @@ void loop() {
 		updateDisplay();
 		Display::ensureBacklight();
 		lastDisp = millis();
+	}
+
+	// --- LED: flash on packet activity (only when display is on) ---
+	if (!Display::isOn()) { led_off(); }
+	else {
+		static uint32_t last_tx = 0, last_rx = 0;
+		if (tx_count != last_tx || rx_count != last_rx) {
+			led_on();
+			last_tx = tx_count;
+			last_rx = rx_count;
+		} else {
+			led_off();
+		}
 	}
 }

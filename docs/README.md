@@ -402,6 +402,53 @@ These issues are documented in the RTNode-HeltecV4 project. Patches exist but re
 
 Transport node periodic re-announce (for multi-hop chain discovery) is currently disabled due to stability issues with `Destination::announce()` on constrained hardware. The initial boot announce works correctly. For single-hop ESP-NOW broadcast meshes, this has no practical impact since all nodes hear each other directly.
 
+## Performance
+
+### Event-Driven Architecture
+
+All three firmware types use event-driven main loops instead of busy polling:
+
+- **BLE Client**: blocks on ESP-NOW RX queue (`xQueueReceive` with 10ms timeout). Wakes instantly on mesh data, checks BLE RX and buttons at 100Hz during idle.
+- **UART Client**: same pattern with 10ms timeout, fast enough for 921600 baud serial.
+- **Retranslator**: blocks on ESPNOWInterface notification semaphore (50ms timeout), then calls `reticulum.loop()` for packet processing and transport jobs.
+
+CPU sleeps during the timeout wait (FreeRTOS idle task runs), reducing power consumption and chip temperature.
+
+### BLE Throughput Optimization
+
+The BLE client implements several optimizations for maximum throughput over the Nordic UART Service (NUS):
+
+| Feature | Value | Effect |
+|---------|-------|--------|
+| MTU | 517 bytes | 509-byte notification payloads |
+| Data Length Extension (DLE) | 251 bytes | ~10x fewer link-layer packets per notification |
+| 2M PHY | Requested on C3/S3/C6 | Doubles air-time speed |
+| Connection interval | 15-30ms | Faster than phone default (30-50ms) |
+| Notification fragmentation | MTU-aware chunking | Large packets split correctly instead of truncated |
+| Notify pacing | 1ms between sends | Prevents NimBLE TX buffer overflow |
+
+**Throughput ceiling**: BLE NUS theoretical max is ~100-170 KB/s with all optimizations. Real-world with WiFi+BLE coexistence: ~30-60 KB/s. This exceeds typical Reticulum traffic requirements.
+
+**Note**: 2M PHY is only available on BLE 5.0 chips (C3, S3, C6). ESP32 classic (T-Display, DevKit) stays on 1M PHY. Connection parameters are requested after authentication to avoid disrupting the pairing handshake.
+
+## CI/CD
+
+### Automated Releases
+
+Pushing a version tag triggers the full pipeline:
+
+```bash
+git tag v1.1.1 && git push --tags
+```
+
+1. **Build**: all 27 firmware environments across 4 parallel matrix groups
+2. **Release**: GitHub Release with binaries and SHA256 checksums
+3. **Deploy**: firmware binaries copied to `gh-pages` branch, `versions.json` manifest updated, web flasher HTML synced
+
+### Web Flasher
+
+The [web flasher](https://smit1237.github.io/reticulum-espnow/flasher/) uses Web Serial API (Chrome/Edge) with esptool-js. It reads `firmware/versions.json` to populate a version selector, then offers cascading dropdowns: Version -> Firmware Type -> Board Variant. Firmware is downloaded from GitHub Pages (CORS-safe).
+
 ## Troubleshooting
 
 ### BLE device not visible on phone
@@ -441,11 +488,6 @@ Transport node periodic re-announce (for multi-hop chain discovery) is currently
 
 ## License
 
-This project uses the following open-source components:
+This project is licensed under the [MIT License](../LICENSE).
 
-- [microReticulum](https://github.com/attermann/microReticulum) -- Apache 2.0
-- [Reticulum](https://github.com/markqvist/reticulum) -- MIT
-- [NimBLE-Arduino](https://github.com/h2zero/NimBLE-Arduino) -- Apache 2.0
-- [U8g2](https://github.com/olikraus/U8g2) -- BSD
-- [TFT_eSPI](https://github.com/Bodmer/TFT_eSPI) -- Mixed
-- [LovyanGFX](https://github.com/lovyan03/LovyanGFX) -- MIT (channel scanner)
+See the [root README](../README.md) for a complete list of dependency licenses.
