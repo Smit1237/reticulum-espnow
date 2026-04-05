@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.2.0 -- Periodic Re-Announce & Transport Improvements
+## v1.1.2 -- Periodic Re-Announce & Transport Improvements
 
 ### Transport Re-Announce
 - **Periodic probe destination re-announce** for transport nodes. Retrieves the registered probe destination by hash and calls `announce()` — safe reuse of existing object, no duplicate registration crash.
