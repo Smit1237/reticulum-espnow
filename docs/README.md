@@ -166,13 +166,27 @@ All nodes in the mesh must use the same channel. Use the channel scanner tool to
 
 802.11 LR mode doubles range (~500m line-of-sight) at the cost of reduced throughput (512/256 Kbps vs 1 Mbps). Supported on all ESP32 variants except ESP32-C2. All mesh nodes must use the same setting.
 
+### Re-Announce Interval (Retranslator)
+
+```c
+#define REANNOUNCE_INTERVAL_MS (30 * 60 * 1000UL)  // default 30 minutes
+```
+
+Transport nodes periodically re-announce their probe destination so that nodes joining later can discover them. Configurable per-environment via build flag:
+
+```ini
+build_flags = -DREANNOUNCE_INTERVAL_MS=7200000  ; 2 hours
+```
+
+When free heap drops below 40KB (from gradual fragmentation), the node auto-reboots. Identity and path table persist on flash, so the node recovers in ~2 seconds with a fresh announce.
+
 ### Transport Announce Interval
 
 ```c
 #define TRANSPORT_ANNOUNCE_INTERVAL_MS  (2 * 60 * 60 * 1000UL)  // 2 hours
 ```
 
-Reserved for periodic retranslator re-announce on the mesh. Currently unused -- periodic re-announce is disabled due to stability issues on constrained hardware. The retranslator announces once at boot, which is sufficient for single-hop ESP-NOW broadcast meshes where all nodes hear each other directly.
+Legacy setting from board_config.h. The actual re-announce interval is now controlled by `REANNOUNCE_INTERVAL_MS` (see above).
 
 ### Debug Build
 
@@ -400,7 +414,7 @@ These issues are documented in the RTNode-HeltecV4 project. Patches exist but re
 
 ### Periodic Re-announce
 
-Transport node periodic re-announce (for multi-hop chain discovery) is currently disabled due to stability issues with `Destination::announce()` on constrained hardware. The initial boot announce works correctly. For single-hop ESP-NOW broadcast meshes, this has no practical impact since all nodes hear each other directly.
+Transport nodes auto-reboot when heap fragmentation reaches the 40KB guard threshold. This is caused by temporary allocations during announce processing (upstream microReticulum issue). Identity and path table persist on flash, so the node recovers in ~2 seconds. At the default 30-minute re-announce interval, this occurs approximately every 15-20 days.
 
 ## Performance
 

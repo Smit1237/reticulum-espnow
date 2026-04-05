@@ -81,7 +81,7 @@ static RNS::Bytes probe_hash;           // Hash of probe destination (computed a
 static uint32_t reannounce_count = 0;   // Counter for debug display
 // Configurable via build flag: -DREANNOUNCE_INTERVAL_MS=600000
 #ifndef REANNOUNCE_INTERVAL_MS
-#define REANNOUNCE_INTERVAL_MS (10 * 60 * 1000UL)  // default 10 minutes
+#define REANNOUNCE_INTERVAL_MS (30 * 60 * 1000UL)  // default 30 minutes
 #endif
 
 void updateDisplay() {

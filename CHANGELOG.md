@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.2.0 -- Periodic Re-Announce & Transport Improvements
+
+### Transport Re-Announce
+- **Periodic probe destination re-announce** for transport nodes. Retrieves the registered probe destination by hash and calls `announce()` — safe reuse of existing object, no duplicate registration crash.
+- Default interval: 30 minutes (configurable via `-DREANNOUNCE_INTERVAL_MS` build flag)
+- Heap guard: auto-reboots when free heap drops below 40KB (identity and paths persist on flash, node recovers in ~2 seconds)
+
+### Self-Echo Filter
+- **ESPNOWInterface TX echo filter** prevents the node from processing its own broadcast packets. 8-slot ring buffer of 16-byte prefixes matched against incoming data. Reduces per-announce heap fragmentation from ~5KB to ~670 bytes.
+
+### Retranslator Display
+- Shows packet counts (TX/RX) instead of byte counts, consistent with BLE and UART clients
+- Added `rxPackets()`/`txPackets()` static counters to ESPNOWInterface
+
+### Configuration
+- `REANNOUNCE_INTERVAL_MS` — configurable per-environment via build flag (default 30 minutes)
+  Example: `-DREANNOUNCE_INTERVAL_MS=7200000` for 2-hour interval
+
+---
+
 ## v1.1.1 -- BLE Throughput & Stability
 
 ### BLE Throughput
