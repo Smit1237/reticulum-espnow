@@ -159,7 +159,7 @@ pio device monitor</code></pre>
 <tr><th>Setting</th><th>Default</th><th>Description</th></tr>
 <tr><td><code>ESPNOW_CHANNEL</code></td><td>13</td><td>WiFi channel (1-13). All nodes must match.</td></tr>
 <tr><td><code>ESPNOW_LONG_RANGE</code></td><td>1</td><td>802.11 LR mode. 1=enabled (~500m), 0=standard (~200m).</td></tr>
-<tr><td><code>TRANSPORT_ANNOUNCE_INTERVAL_MS</code></td><td>7200000</td><td>Retranslator re-announce interval (2 hours). Currently unused -- periodic re-announce is disabled due to stability issues on constrained hardware. Reserved for future use.</td></tr>
+<tr><td><code>REANNOUNCE_INTERVAL_MS</code></td><td>1800000</td><td>Transport node re-announce interval (30 minutes). Configurable per-environment via build flag. Auto-reboots on low heap (&lt;40KB).</td></tr>
 </table>
 
 <h2 id="controls">User Controls</h2>
@@ -400,7 +400,7 @@ pio device monitor</code></pre>
 <h2 id="limits">Known Limitations</h2>
 <ul>
 <li><strong>ESP32-C3 retranslator memory</strong> -- limited to small networks (up to 20 nodes) due to upstream microReticulum heap management issues under heavy announce traffic. Use ESP32-S3 with PSRAM for larger deployments.</li>
-<li><strong>Periodic re-announce</strong> -- disabled on constrained hardware due to stability issues. Initial boot announce works. Not needed for single-hop broadcast meshes.</li>
+<li><strong>Transport node auto-reboot</strong> -- heap fragmentation from announce processing causes gradual memory loss (~670 bytes/cycle). Node auto-reboots at 40KB threshold (~15-20 days at 30min interval). Identity and paths persist on flash.</li>
 <li><strong>ESP32-S2</strong> -- retranslator and UART only (no BLE hardware).</li>
 <li><strong>ESP32-S3 RGB LED</strong> -- the onboard NeoPixel LED on DevKitC boards ships with the solder bridge open by default. Close the pad labeled "RGB" near the LED to enable it. PSRAM works without any modification.</li>
 </ul>
@@ -506,7 +506,7 @@ pio run -e client_c3 -t upload --upload-port COM24</code></pre>
 <tr><th>Параметр</th><th>По умолчанию</th><th>Описание</th></tr>
 <tr><td><code>ESPNOW_CHANNEL</code></td><td>13</td><td>WiFi канал (1-13). Все узлы должны совпадать.</td></tr>
 <tr><td><code>ESPNOW_LONG_RANGE</code></td><td>1</td><td>Режим 802.11 LR. 1=включен (~500 м), 0=стандарт (~200 м).</td></tr>
-<tr><td><code>TRANSPORT_ANNOUNCE_INTERVAL_MS</code></td><td>7200000</td><td>Интервал реанонса ретранслятора (2 часа).</td></tr>
+<tr><td><code>REANNOUNCE_INTERVAL_MS</code></td><td>1800000</td><td>Интервал реанонса транспортного узла (30 минут). Настраивается через флаг сборки. Авто-перезагрузка при низкой куче (&lt;40 КБ).</td></tr>
 </table>
 
 <h2 id="controls-ru">Управление кнопками</h2>
@@ -629,7 +629,7 @@ pio run -e client_c3 -t upload --upload-port COM24</code></pre>
 <h2 id="limits-ru">Известные ограничения</h2>
 <ul>
 <li><strong>Память ESP32-C3 ретранслятора</strong> -- ограничен малыми сетями (до 20 узлов). Для крупных сетей используйте ESP32-S3 с PSRAM.</li>
-<li><strong>Периодический реанонс</strong> -- отключен на ограниченном оборудовании. Начальный анонс при загрузке работает.</li>
+<li><strong>Авто-перезагрузка транспортных узлов</strong> -- фрагментация кучи при обработке анонсов (~670 байт/цикл). Узел перезагружается при пороге 40 КБ (~15-20 дней при 30-мин интервале). Идентификатор и маршруты сохраняются.</li>
 <li><strong>ESP32-S2</strong> -- только ретранслятор и UART (нет BLE).</li>
 <li><strong>ESP32-S3 PSRAM</strong> -- octal PSRAM модули (R8) требуют пайки перемычки на некоторых платах.</li>
 </ul>
