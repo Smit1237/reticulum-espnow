@@ -18,6 +18,8 @@ uint8_t ESPNOWInterface::_local_mac[6] = {0};
 volatile uint32_t ESPNOWInterface::_rx_drops = 0;
 uint32_t ESPNOWInterface::_rx_packets = 0;
 uint32_t ESPNOWInterface::_tx_packets = 0;
+ESPNOWInterface::tx_filter_entry_t ESPNOWInterface::_tx_filter[TX_FILTER_SLOTS] = {};
+uint8_t ESPNOWInterface::_tx_filter_idx = 0;
 
 // Broadcast MAC address
 static const uint8_t BROADCAST_ADDR[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -126,6 +128,23 @@ void ESPNOWInterface::loop() {
 	// Process all queued received packets
 	rx_packet_t pkt;
 	while (xQueueReceive(_rx_queue, &pkt, 0) == pdTRUE) {
+		// Check against recently sent packets — skip self-heard broadcasts.
+		// This prevents Transport from allocating a full Packet object just
+		// to discover the packet hash is already in _packet_hashlist.
+		bool is_echo = false;
+		for (uint8_t i = 0; i < TX_FILTER_SLOTS; i++) {
+			auto& slot = _tx_filter[i];
+			if (slot.len == pkt.len && slot.len > 0) {
+				uint8_t n = pkt.len < TX_FILTER_PREFIX ? pkt.len : TX_FILTER_PREFIX;
+				if (memcmp(slot.prefix, pkt.data, n) == 0) {
+					is_echo = true;
+					slot.len = 0;  // consume — only match once
+					break;
+				}
+			}
+		}
+		if (is_echo) continue;
+
 		_rx_packets++;
 		Bytes data(pkt.data, pkt.len);
 		on_incoming(data);
@@ -147,6 +166,13 @@ void ESPNOWInterface::loop() {
 			} else {
 				TRACEF("ESP-NOW: sent %lu bytes", data.size());
 				_tx_packets++;
+
+				// Record prefix for self-send filter
+				auto& slot = _tx_filter[_tx_filter_idx % TX_FILTER_SLOTS];
+				slot.len = (uint16_t)data.size();
+				uint8_t n = data.size() < TX_FILTER_PREFIX ? data.size() : TX_FILTER_PREFIX;
+				memcpy(slot.prefix, data.data(), n);
+				_tx_filter_idx++;
 			}
 
 			// Post-send housekeeping

@@ -79,7 +79,10 @@ static unsigned long last_temp_read = 0;
 // Periodic re-announce
 static RNS::Bytes probe_hash;           // Hash of probe destination (computed after start)
 static uint32_t reannounce_count = 0;   // Counter for debug display
-#define REANNOUNCE_INTERVAL_MS (10 * 60 * 1000UL)  // 10 minutes (debug), change to 2h for production
+// Configurable via build flag: -DREANNOUNCE_INTERVAL_MS=600000
+#ifndef REANNOUNCE_INTERVAL_MS
+#define REANNOUNCE_INTERVAL_MS (10 * 60 * 1000UL)  // default 10 minutes
+#endif
 
 void updateDisplay() {
 	if (!Display::isOn()) return;
@@ -348,8 +351,13 @@ void loop() {
 		} else if (probe_hash.size() == 0) {
 			Serial.println("Re-announce: probe hash not computed");
 		} else {
-			Serial.printf("Re-announce: skipped, low heap (%lu)\r\n",
+			// Heap fragmented beyond recovery — reboot to start fresh.
+			// Identity and path table are persisted to flash, so the node
+			// comes back in ~2 seconds with a clean heap + fresh announce.
+			Serial.printf("Heap low (%lu), rebooting to defragment...\r\n",
 				(unsigned long)ESP.getFreeHeap());
+			delay(100);
+			ESP.restart();
 		}
 	}
 

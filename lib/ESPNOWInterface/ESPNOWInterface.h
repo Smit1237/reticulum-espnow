@@ -56,6 +56,18 @@ private:
 	static uint32_t _rx_packets;
 	static uint32_t _tx_packets;
 
+	// Recent TX filter: skip inbound packets that match recently sent data.
+	// Prevents the node from processing its own broadcasts (which come back
+	// via ESP-NOW) and avoids ~400 bytes of heap allocation per duplicate.
+	static constexpr uint8_t TX_FILTER_SLOTS = 8;
+	static constexpr uint8_t TX_FILTER_PREFIX = 16;  // bytes to compare
+	struct tx_filter_entry_t {
+		uint8_t prefix[TX_FILTER_PREFIX];
+		uint16_t len;
+	};
+	static tx_filter_entry_t _tx_filter[TX_FILTER_SLOTS];
+	static uint8_t _tx_filter_idx;
+
 	// Binary semaphore: signaled from ISR when data arrives.
 	// External code can block on this for event-driven loops.
 	static SemaphoreHandle_t _rx_notify;
