@@ -11,6 +11,8 @@
 
 #include <Reticulum.h>
 #include <Transport.h>
+#include <Destination.h>
+#include <Identity.h>
 #include <Interface.h>
 #include <Log.h>
 #include <Bytes.h>
@@ -74,16 +76,18 @@ static size_t last_txb = 0;
 static float chip_temp = 0;
 static unsigned long last_temp_read = 0;
 
+// Periodic re-announce
+static RNS::Bytes probe_hash;           // Hash of probe destination (computed after start)
+static uint32_t reannounce_count = 0;   // Counter for debug display
+#define REANNOUNCE_INTERVAL_MS (10 * 60 * 1000UL)  // 10 minutes (debug), change to 2h for production
+
 void updateDisplay() {
 	if (!Display::isOn()) return;
-	if (millis() - last_temp_read > 5000) {
-		chip_temp = temperatureRead();
-		last_temp_read = millis();
-	}
+	// Show reannounce count instead of temperature (debug)
 	Display::showStatus(true, "TRANSPORT",
 	                    (unsigned long)espnow_interface.txb(),
 	                    (unsigned long)espnow_interface.rxb(),
-	                    chip_temp);
+	                    (float)reannounce_count);
 }
 
 // =============== First boot / Factory reset ===============
@@ -221,6 +225,14 @@ void reticulum_setup() {
 		reticulum.probe_destination_enabled(true);
 		reticulum.start();
 
+		// Compute probe destination hash for periodic re-announce
+		// The probe destination was created in Transport::start() and is
+		// registered in Transport::_destinations. We retrieve it by hash
+		// to call announce() without creating a duplicate (which would crash).
+		probe_hash = RNS::Destination::hash(
+			RNS::Transport::identity(), "rnstransport", "probe");
+		Serial.printf("Probe destination hash: %s\r\n", probe_hash.toHex().c_str());
+
 		INFOF("Transport ready! Free heap: %lu PSRAM free: %lu",
 			(unsigned long)ESP.getFreeHeap(), (unsigned long)ESP.getFreePsram());
 	}
@@ -307,10 +319,36 @@ void loop() {
 	// --- Run Reticulum (processes queued packets + transport jobs) ---
 	reticulum.loop();
 
-	// NOTE: Periodic transport re-announce not implemented on C3 due to
-	// microReticulum abort() during announce rebroadcast on constrained hardware.
-	// Single-hop ESP-NOW broadcast doesn't need it — all nodes hear initial announce.
-	// For multi-hop chains, use S3 retranslator which has more resources.
+	// --- Periodic transport re-announce ---
+	// Retrieves the probe destination registered by Transport::start() and
+	// calls announce() on it. Safe because we reuse the existing registered
+	// object (no new Destination creation = no duplicate hash = no crash).
+	static unsigned long last_reannounce = 0;
+	if (millis() - last_reannounce > REANNOUNCE_INTERVAL_MS) {
+		last_reannounce = millis();
+
+		if (probe_hash.size() > 0 && ESP.getFreeHeap() > 40000) {
+			try {
+				RNS::Destination probe = RNS::Transport::find_destination_from_hash(probe_hash);
+				if (probe) {
+					probe.announce();
+					reannounce_count++;
+					Serial.printf("Re-announce #%lu (heap: %lu)\r\n",
+						(unsigned long)reannounce_count, (unsigned long)ESP.getFreeHeap());
+				} else {
+					Serial.println("Re-announce: probe destination not found in registry");
+				}
+			}
+			catch (const std::exception& e) {
+				Serial.printf("Re-announce FAILED: %s\r\n", e.what());
+			}
+		} else if (probe_hash.size() == 0) {
+			Serial.println("Re-announce: probe hash not computed");
+		} else {
+			Serial.printf("Re-announce: skipped, low heap (%lu)\r\n",
+				(unsigned long)ESP.getFreeHeap());
+		}
+	}
 
 	// --- Button handling: double-tap = toggle display, hold 5s = factory reset ---
 	static unsigned long lastTapAt = 0;
