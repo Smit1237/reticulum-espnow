@@ -16,6 +16,8 @@ QueueHandle_t ESPNOWInterface::_rx_queue = nullptr;
 SemaphoreHandle_t ESPNOWInterface::_rx_notify = nullptr;
 uint8_t ESPNOWInterface::_local_mac[6] = {0};
 volatile uint32_t ESPNOWInterface::_rx_drops = 0;
+uint32_t ESPNOWInterface::_rx_packets = 0;
+uint32_t ESPNOWInterface::_tx_packets = 0;
 
 // Broadcast MAC address
 static const uint8_t BROADCAST_ADDR[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -124,6 +126,7 @@ void ESPNOWInterface::loop() {
 	// Process all queued received packets
 	rx_packet_t pkt;
 	while (xQueueReceive(_rx_queue, &pkt, 0) == pdTRUE) {
+		_rx_packets++;
 		Bytes data(pkt.data, pkt.len);
 		on_incoming(data);
 	}
@@ -143,6 +146,7 @@ void ESPNOWInterface::loop() {
 				ERRORF("ESP-NOW: send failed, error 0x%X", result);
 			} else {
 				TRACEF("ESP-NOW: sent %lu bytes", data.size());
+				_tx_packets++;
 			}
 
 			// Post-send housekeeping

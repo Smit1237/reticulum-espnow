@@ -52,12 +52,18 @@ private:
 	// RX queue drop counter
 	static volatile uint32_t _rx_drops;
 
+	// Packet counters
+	static uint32_t _rx_packets;
+	static uint32_t _tx_packets;
+
 	// Binary semaphore: signaled from ISR when data arrives.
 	// External code can block on this for event-driven loops.
 	static SemaphoreHandle_t _rx_notify;
 
 public:
 	static uint32_t rxDrops() { return _rx_drops; }
+	static uint32_t rxPackets() { return _rx_packets; }
+	static uint32_t txPackets() { return _tx_packets; }
 
 	// Wait for incoming data or timeout. Returns true if data is likely available.
 	// Use this in your main loop instead of delay() for event-driven operation.

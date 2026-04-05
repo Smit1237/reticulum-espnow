@@ -83,11 +83,14 @@ static uint32_t reannounce_count = 0;   // Counter for debug display
 
 void updateDisplay() {
 	if (!Display::isOn()) return;
-	// Show reannounce count instead of temperature (debug)
+	if (millis() - last_temp_read > 5000) {
+		chip_temp = temperatureRead();
+		last_temp_read = millis();
+	}
 	Display::showStatus(true, "TRANSPORT",
-	                    (unsigned long)espnow_interface.txb(),
-	                    (unsigned long)espnow_interface.rxb(),
-	                    (float)reannounce_count);
+	                    (unsigned long)ESPNOWInterface::txPackets(),
+	                    (unsigned long)ESPNOWInterface::rxPackets(),
+	                    chip_temp);
 }
 
 // =============== First boot / Factory reset ===============
