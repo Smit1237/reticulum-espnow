@@ -80,11 +80,19 @@ input[type="file"] { display: none; }
 <div class="step">
 <h2><span class="step-num">3</span> Flash</h2>
 <button id="btn-flash" class="primary" onclick="flashFirmware()" disabled>Flash Firmware</button>
+<label style="display:inline-block;margin-left:12px;font-size:0.9em;cursor:pointer"><input type="checkbox" id="chk-erase" style="margin-right:4px">Full flash erase before flashing</label>
 <div class="progress-bar" id="progress-bar">
 <div class="progress-fill" id="progress-fill" style="width:0%"></div>
 </div>
 <div class="progress-text" id="progress-text"></div>
 <div id="status" class="status"></div>
+</div>
+
+<div class="step">
+<h2><span class="step-num">4</span> Serial Monitor</h2>
+<p style="font-size:0.85em;margin-bottom:8px">View device output after flashing (pairing PIN, boot messages). Connect to the same port at 115200 baud.</p>
+<button id="btn-monitor" onclick="toggleMonitor()">Start Monitor</button>
+<div id="monitor" style="background:#0d1117;border:1px solid var(--border);border-radius:6px;padding:10px;font-family:Consolas,monospace;font-size:0.8em;max-height:200px;overflow-y:auto;white-space:pre-wrap;margin-top:8px;display:none"></div>
 </div>
 
 <div class="step">
@@ -282,15 +290,21 @@ function populateTypeDropdown() {
     sel.disabled = false;
 
     const chipKey = chipToKey(detectedChip) || '';
-    if (!chipKey) {
-        sel.innerHTML = '<option value="">Unsupported chip: ' + detectedChip + '</option>';
-        return;
-    }
 
+    // Show types that have available firmware — filter by chip if detected
     const types = new Set();
     for (const [env, info] of Object.entries(FIRMWARE_DB)) {
-        if (info.chip === chipKey && availableFirmware[env]) {
-            types.add(info.type);
+        if (availableFirmware[env]) {
+            if (!chipKey || info.chip === chipKey) {
+                types.add(info.type);
+            }
+        }
+    }
+
+    // If chip detected but no matching firmware, fall back to showing all types
+    if (types.size === 0) {
+        for (const [env, info] of Object.entries(FIRMWARE_DB)) {
+            if (availableFirmware[env]) types.add(info.type);
         }
     }
 
@@ -301,6 +315,10 @@ function populateTypeDropdown() {
             opt.textContent = TYPE_LABELS[type];
             sel.appendChild(opt);
         }
+    }
+
+    if (!chipKey) {
+        log('Chip not recognized — showing all firmware. Select your board manually.');
     }
 }
 
@@ -323,13 +341,29 @@ window.updateFirmwareList = function() {
     let count = 0;
     sel.innerHTML = '<option value="">-- select board --</option>';
 
+    // Show matching boards first, then all others if chip not detected
     for (const [env, info] of Object.entries(FIRMWARE_DB)) {
-        if (info.chip === chipKey && info.type === type && availableFirmware[env]) {
-            const opt = document.createElement('option');
-            opt.value = env;
-            opt.textContent = info.label;
-            sel.appendChild(opt);
-            count++;
+        if (info.type === type && availableFirmware[env]) {
+            if (!chipKey || info.chip === chipKey) {
+                const opt = document.createElement('option');
+                opt.value = env;
+                opt.textContent = info.label;
+                sel.appendChild(opt);
+                count++;
+            }
+        }
+    }
+
+    // If no matches (chip detected but no firmware for it), show all boards
+    if (count === 0) {
+        for (const [env, info] of Object.entries(FIRMWARE_DB)) {
+            if (info.type === type && availableFirmware[env]) {
+                const opt = document.createElement('option');
+                opt.value = env;
+                opt.textContent = info.label + ' (' + info.chip.toUpperCase() + ')';
+                sel.appendChild(opt);
+                count++;
+            }
         }
     }
 
@@ -340,7 +374,7 @@ window.updateFirmwareList = function() {
             firmwareSelected();
         }
     } else {
-        sel.innerHTML = '<option value="">No firmware available for ' + detectedChip + '</option>';
+        sel.innerHTML = '<option value="">No firmware available</option>';
     }
 };
 
@@ -455,7 +489,15 @@ window.flashFirmware = async function() {
     progressFill.style.width = '0%';
 
     try {
-        const offset = 0x10000;
+        const offset = 0x0;  // Merged binary includes bootloader + partitions
+
+        if (document.getElementById('chk-erase').checked) {
+            log('Erasing flash...');
+            setStatus('Erasing flash...', '');
+            await esploader.eraseFlash();
+            log('Flash erased.');
+        }
+
         log('Flashing at offset 0x' + offset.toString(16) + ' (' + firmwareData.length + ' bytes)...');
 
         await esploader.writeFlash({
@@ -499,6 +541,76 @@ window.flashFirmware = async function() {
 
     btn.textContent = 'Flash Firmware';
     btn.disabled = false;
+};
+
+// ============================================================
+// Serial Monitor — view device output (pairing PIN, boot messages)
+// ============================================================
+
+let monitorPort = null;
+let monitorReader = null;
+let monitorRunning = false;
+
+window.toggleMonitor = async function() {
+    const btn = document.getElementById('btn-monitor');
+    const monEl = document.getElementById('monitor');
+
+    if (monitorRunning) {
+        // Stop monitor
+        monitorRunning = false;
+        if (monitorReader) {
+            try { await monitorReader.cancel(); } catch(_) {}
+            monitorReader = null;
+        }
+        if (monitorPort) {
+            try { await monitorPort.close(); } catch(_) {}
+            monitorPort = null;
+        }
+        btn.textContent = 'Start Monitor';
+        return;
+    }
+
+    try {
+        monitorPort = await navigator.serial.requestPort();
+        await monitorPort.open({ baudRate: 115200 });
+        monitorRunning = true;
+        monEl.style.display = 'block';
+        monEl.textContent = '';
+        btn.textContent = 'Stop Monitor';
+
+        const decoder = new TextDecoderStream();
+        monitorPort.readable.pipeTo(decoder.writable).catch(() => {});
+        monitorReader = decoder.readable.getReader();
+
+        while (monitorRunning) {
+            try {
+                const { value, done } = await monitorReader.read();
+                if (done) break;
+                if (value) {
+                    monEl.textContent += value;
+                    // Auto-scroll and trim if too long
+                    if (monEl.textContent.length > 10000) {
+                        monEl.textContent = monEl.textContent.slice(-8000);
+                    }
+                    monEl.scrollTop = monEl.scrollHeight;
+                }
+            } catch (e) {
+                if (monitorRunning) monEl.textContent += '\n[Monitor disconnected]\n';
+                break;
+            }
+        }
+
+        monitorRunning = false;
+        btn.textContent = 'Start Monitor';
+        try { await monitorPort.close(); } catch(_) {}
+        monitorPort = null;
+
+    } catch (e) {
+        monEl.style.display = 'block';
+        monEl.textContent = 'Monitor error: ' + e.message;
+        monitorRunning = false;
+        btn.textContent = 'Start Monitor';
+    }
 };
 </script>
 
