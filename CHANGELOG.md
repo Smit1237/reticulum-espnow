@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.1.3 -- Merged Binaries, Web Flasher Overhaul
+
+### Merged Firmware Binaries
+- **All firmware binaries now include bootloader + partition table + boot selector + app** in a single file. Flash at offset 0x0 — works on completely erased/new chips.
+- Previous app-only binaries (offset 0x10000) required an existing bootloader and would fail on clean flash.
+- Merge happens automatically during build via `extra_script.py` post-build action.
+- Per-chip bootloader offsets handled: ESP32/S2 at 0x1000, C3/S3/C6 at 0x0000.
+- `boot_app0.bin` (OTA boot selector at 0xe000) included — was the missing piece causing boot failures.
+- Tested on clean-erased: ESP32-C3, ESP32-S3, ESP32 classic (WROOM/WROVER) — all boot correctly.
+
+### Web Flasher
+- **Flash offset changed from 0x10000 to 0x0** for merged binaries.
+- **Full flash erase checkbox** — optional erase before flashing for clean installs.
+- **Serial Monitor (Step 4)** — view device output after flashing (pairing PIN, boot messages) directly in the browser. Start/Stop with separate port connection at 115200 baud.
+- **Unlocked UI on unknown chips** — if chip auto-detection fails or returns an unsupported chip, all firmware types and boards are shown instead of blocking the UI. Chip detection still pre-filters when successful.
+- **CI pipeline fix** — `.app.bin` files excluded from release artifacts, only merged binaries deployed.
+
+### Documentation
+- Fixed Russian translation in HTML manual: ESP32-S3 solder bridge is for RGB LED, not PSRAM.
+
+### Standalone Flasher
+- Desktop `esp32-flasher.html` updated with offset 0x0, erase checkbox, and serial monitor.
+
+---
+
 ## v1.1.2 -- Periodic Re-Announce & Transport Improvements
 
 ### Transport Re-Announce

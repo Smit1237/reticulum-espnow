@@ -88,7 +88,7 @@ jobs:
       - name: Collect binaries
         run: |
           mkdir -p artifacts
-          find .pio/build -name "firmware_*.bin" -exec cp {} artifacts/ \;
+          find .pio/build -name "firmware_*.bin" ! -name "*.app.bin" -exec cp {} artifacts/ \;
           ls -la artifacts/
 
       - name: Upload artifacts
