@@ -1,0 +1,19 @@
+.pio/build/client_s3/lib9e9/NimBLE-Arduino/nimble/nimble/transport/common/hci_ipc/src/hci_ipc.c.o: \
+ .pio/libdeps/client_s3/NimBLE-Arduino/src/nimble/nimble/transport/common/hci_ipc/src/hci_ipc.c \
+ .pio/libdeps/client_s3/NimBLE-Arduino/src/nimble/porting/nimble/include/syscfg/syscfg.h \
+ .pio/libdeps/client_s3/NimBLE-Arduino/src/nimble/esp_port/port/include/esp_nimble_cfg.h \
+ .pio/libdeps/client_s3/NimBLE-Arduino/src/nimconfig.h \
+ .pio/libdeps/client_s3/NimBLE-Arduino/src/nimconfig_rename.h \
+ .pio/libdeps/client_s3/NimBLE-Arduino/src/nimble/porting/nimble/include/os/os.h \
+ .pio/libdeps/client_s3/NimBLE-Arduino/src/nimble/nimble/include/nimble/nimble_npl.h \
+ .pio/libdeps/client_s3/NimBLE-Arduino/src/nimble/porting/npl/freertos/include/nimble/nimble_npl_os.h \
+ .pio/libdeps/client_s3/NimBLE-Arduino/src/nimble/porting/nimble/include/os/queue.h \
+ .pio/libdeps/client_s3/NimBLE-Arduino/src/nimble/porting/npl/freertos/include/nimble/npl_freertos.h \
+ .pio/libdeps/client_s3/NimBLE-Arduino/src/nimble/porting/nimble/include/os/endian.h \
+ .pio/libdeps/client_s3/NimBLE-Arduino/src/nimble/porting/nimble/include/os/os_error.h \
+ .pio/libdeps/client_s3/NimBLE-Arduino/src/nimble/porting/nimble/include/os/os_mbuf.h \
+ .pio/libdeps/client_s3/NimBLE-Arduino/src/nimble/porting/nimble/include/os/os_mempool.h \
+ .pio/libdeps/client_s3/NimBLE-Arduino/src/nimble/nimble/transport/include/nimble/transport.h \
+ .pio/libdeps/client_s3/NimBLE-Arduino/src/nimble/nimble/transport/include/nimble/transport_impl.h \
+ .pio/libdeps/client_s3/NimBLE-Arduino/src/nimble/nimble/transport/include/nimble/transport/monitor.h \
+ .pio/libdeps/client_s3/NimBLE-Arduino/src/nimble/nimble/transport/common/hci_ipc/include/nimble/transport/hci_ipc.h

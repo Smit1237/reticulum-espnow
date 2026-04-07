@@ -1,0 +1,4 @@
+.pio/build/client_tdisplay/libbc7/NimBLE-Arduino/nimble/ext/tinycrypt/src/utils.c.o: \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimble/ext/tinycrypt/src/utils.c \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimble/ext/tinycrypt/include/tinycrypt/utils.h \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimble/ext/tinycrypt/include/tinycrypt/constants.h

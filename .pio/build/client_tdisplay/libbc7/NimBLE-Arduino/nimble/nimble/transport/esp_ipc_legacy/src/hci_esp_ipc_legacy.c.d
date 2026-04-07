@@ -1,0 +1,21 @@
+.pio/build/client_tdisplay/libbc7/NimBLE-Arduino/nimble/nimble/transport/esp_ipc_legacy/src/hci_esp_ipc_legacy.c.o: \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimble/nimble/transport/esp_ipc_legacy/src/hci_esp_ipc_legacy.c \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimble/porting/nimble/include/syscfg/syscfg.h \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimble/esp_port/port/include/esp_nimble_cfg.h \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimconfig.h \
+ C:/Users/User/.platformio/packages/framework-arduinoespressif32-libs/esp32/dio_qspi/include/sdkconfig.h \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimconfig_rename.h \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimble/porting/nimble/include/sysinit/sysinit.h \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimble/nimble/transport/include/nimble/transport.h \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimble/nimble/transport/include/nimble/transport_impl.h \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimble/porting/nimble/include/os/os_mempool.h \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimble/porting/nimble/include/os/os.h \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimble/nimble/include/nimble/nimble_npl.h \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimble/porting/npl/freertos/include/nimble/nimble_npl_os.h \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimble/porting/nimble/include/os/queue.h \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimble/porting/npl/freertos/include/nimble/npl_freertos.h \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimble/porting/nimble/include/os/endian.h \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimble/porting/nimble/include/os/os_error.h \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimble/porting/nimble/include/os/os_mbuf.h \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimble/nimble/transport/include/nimble/transport/monitor.h \
+ .pio/libdeps/client_tdisplay/NimBLE-Arduino/src/nimble/esp_port/esp-hci/include/esp_nimble_hci.h
