@@ -85,10 +85,10 @@ jobs:
             pio run -e "$env"
           done
 
-      - name: Collect binaries
+      - name: Collect firmware packages
         run: |
           mkdir -p artifacts
-          find .pio/build -name "firmware_*.bin" ! -name "*.app.bin" -exec cp {} artifacts/ \;
+          find .pio/build -name "firmware_*.zip" -exec cp {} artifacts/ \;
           ls -la artifacts/
 
       - name: Upload artifacts
@@ -120,14 +120,14 @@ jobs:
       - name: Generate SHA256 checksums
         run: |
           cd firmware
-          sha256sum *.bin > SHA256SUMS.txt
+          sha256sum *.zip > SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            firmware/*.bin
+            firmware/*.zip
             firmware/SHA256SUMS.txt
           body_path: CHANGELOG.md
           draft: false
@@ -165,13 +165,13 @@ jobs:
         run: |
           cd gh-pages
 
-          # Create version directory and copy binaries
+          # Create version directory and copy firmware packages
           mkdir -p "firmware/${VERSION}"
-          cp ../artifacts/*.bin "firmware/${VERSION}/"
+          cp ../artifacts/*.zip "firmware/${VERSION}/"
 
           # Generate SHA256 checksums
           cd "firmware/${VERSION}"
-          sha256sum *.bin > SHA256SUMS.txt
+          sha256sum *.zip > SHA256SUMS.txt
           cd ../..
 
           # Copy latest flasher from source (flasher/ version has ../docs path)
@@ -194,7 +194,10 @@ jobs:
           firmware_dir = "firmware"
           for d in sorted(glob.glob(os.path.join(firmware_dir, "v*")), reverse=True):
               ver = os.path.basename(d)
-              bins = sorted([os.path.basename(f) for f in glob.glob(os.path.join(d, "*.bin"))])
+              bins = sorted([os.path.basename(f) for f in glob.glob(os.path.join(d, "*.zip"))])
+              if not bins:
+                  # Fallback: check for .bin files (older releases)
+                  bins = sorted([os.path.basename(f) for f in glob.glob(os.path.join(d, "*.bin"))])
               if not bins:
                   continue
               # Use directory mtime as date

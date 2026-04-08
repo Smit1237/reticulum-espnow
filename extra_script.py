@@ -36,70 +36,60 @@ env.Append(CXXFLAGS=[
 ])
 
 # ---------------------------------------------------------------------------
-# Post-build: merge bootloader + partitions + app into a single flashable
-# binary. This ensures the web flasher works on clean/erased chips.
-# The merged binary replaces the app-only binary — flash at offset 0x0.
+# Post-build: package bootloader + partitions + boot_app0 + app into a zip
+# with a manifest.json. The web flasher reads the manifest and flashes each
+# file at the correct offset — identical to what PIO does natively.
 # ---------------------------------------------------------------------------
 
-def merge_firmware(source, target, env):
+def package_firmware(source, target, env):
+    import json, shutil, zipfile
+
     build_dir = env.subst("$BUILD_DIR")
     progname = env.subst("$PROGNAME")
 
     bootloader = os.path.join(build_dir, "bootloader.bin")
     partitions = os.path.join(build_dir, "partitions.bin")
     app_bin = os.path.join(build_dir, progname + ".bin")
-    app_only = os.path.join(build_dir, progname + ".app.bin")
 
     if not os.path.isfile(bootloader) or not os.path.isfile(partitions):
-        print("  [merge] Bootloader or partitions missing, skipping merge")
+        print("  [package] Bootloader or partitions missing, skipping")
         return
-
-    # Save the original app-only binary (PIO overwrites it each build,
-    # but we need the un-merged version as input to merge-bin)
-    import shutil
-    shutil.copy2(app_bin, app_only)
 
     # Bootloader offset depends on chip
     board_mcu = env.BoardConfig().get("build.mcu", "esp32")
     if board_mcu in ("esp32s3", "esp32c3", "esp32c6", "esp32h2"):
-        bl_offset = "0x0000"
+        bl_offset = 0x0000
     else:
-        bl_offset = "0x1000"  # ESP32, ESP32-S2
+        bl_offset = 0x1000  # ESP32, ESP32-S2
 
-    # boot_app0.bin at 0xe000 — OTA boot selector, required for bootloader
-    # to find the app partition
+    # boot_app0.bin — OTA boot selector
     framework_dir = env.PioPlatform().get_package_dir("framework-arduinoespressif32")
     boot_app0 = os.path.join(framework_dir, "tools", "partitions", "boot_app0.bin")
     if not os.path.isfile(boot_app0):
-        print("  [merge] boot_app0.bin not found at %s, skipping merge" % boot_app0)
+        print("  [package] boot_app0.bin not found, skipping")
         return
 
-    tmp_merged = app_bin + ".merged"
+    # Build manifest
+    manifest = {
+        "chipFamily": board_mcu.upper().replace("ESP32S", "ESP32-S").replace("ESP32C", "ESP32-C").replace("ESP32H", "ESP32-H"),
+        "parts": [
+            {"path": "bootloader.bin",  "offset": bl_offset},
+            {"path": "partitions.bin",  "offset": 0x8000},
+            {"path": "boot_app0.bin",   "offset": 0xE000},
+            {"path": "firmware.bin",    "offset": 0x10000},
+        ]
+    }
 
-    cmd = [
-        env.subst("$PYTHONEXE"), "-m", "esptool",
-        "--chip", board_mcu,
-        "merge-bin",
-        "-o", tmp_merged,
-        "--flash-mode", "dio",
-        "--flash-freq", "80m",
-        "--flash-size", "4MB",
-        bl_offset, bootloader,
-        "0x8000", partitions,
-        "0xe000", boot_app0,
-        "0x10000", app_only,
-    ]
+    # Create zip alongside the .bin
+    zip_path = os.path.join(build_dir, progname + ".zip")
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("manifest.json", json.dumps(manifest, indent=2))
+        zf.write(bootloader, "bootloader.bin")
+        zf.write(partitions, "partitions.bin")
+        zf.write(boot_app0, "boot_app0.bin")
+        zf.write(app_bin, "firmware.bin")
 
-    print("  [merge] Creating merged binary (%s, bl@%s)..." % (board_mcu, bl_offset))
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode == 0 and os.path.isfile(tmp_merged):
-            os.replace(tmp_merged, app_bin)
-            size_kb = os.path.getsize(app_bin) / 1024
-            print("  [merge] OK: %.1f KB (flash at 0x0)" % size_kb)
-        else:
-            print("  [merge] FAILED: %s" % result.stderr.strip())
-    except Exception as e:
-        print("  [merge] FAILED: %s" % str(e))
+    size_kb = os.path.getsize(zip_path) / 1024
+    print("  [package] %s (%.1f KB, bl@0x%04X)" % (os.path.basename(zip_path), size_kb, bl_offset))
 
-env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", merge_firmware)
+env.AddPostAction("$BUILD_DIR/${PROGNAME}.bin", package_firmware)
