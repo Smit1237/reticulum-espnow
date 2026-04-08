@@ -1,6 +1,26 @@
 # Changelog
 
-## v1.1.3 -- Merged Binaries, Web Flasher Overhaul
+## v1.1.4 -- Zip Firmware Packages
+
+### Firmware Packaging
+- **Replaced merged single-binary with zip packages** containing bootloader, partitions, boot_app0, and app as separate files with a manifest.json specifying flash offsets per chip.
+- Web flasher extracts the zip and flashes each part at the correct offset — identical to how PlatformIO flashes natively.
+- Fixes ESP32 classic boot loop caused by merge-bin placing bootloader at wrong address and flash frequency header patching issues.
+- All 26 build environments produce .zip packages.
+
+### Web Flasher
+- Supports .zip (multi-part flash) and .bin (legacy app-only at 0x10000)
+- JSZip library for zip extraction in browser
+- File picker accepts both .zip and .bin formats
+- Full flash erase option, serial monitor for pairing PIN
+
+### Clean Release
+- All prior releases (v1.0.0 — v1.1.3) removed — they contained broken merged binaries that failed on ESP32 classic.
+- v1.1.4 is the first release with reliable zip-based firmware packages.
+
+---
+
+## v1.1.3 -- Merged Binaries, Web Flasher Overhaul (superseded by v1.1.4)
 
 ### Merged Firmware Binaries
 - **All firmware binaries now include bootloader + partition table + boot selector + app** in a single file. Flash at offset 0x0 — works on completely erased/new chips.
