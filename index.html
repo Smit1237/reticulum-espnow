@@ -72,8 +72,8 @@ input[type="file"] { display: none; }
 <div id="fw-info" class="fw-info" style="display:none"></div>
 
 <div class="or-divider">-- or load from file --</div>
-<label class="file-label" for="file-input">Choose .bin file</label>
-<input type="file" id="file-input" accept=".bin" onchange="fileSelected(this)">
+<label class="file-label" for="file-input">Choose firmware (.zip or .bin)</label>
+<input type="file" id="file-input" accept=".zip,.bin" onchange="fileSelected(this)">
 <div id="file-name" class="file-name"></div>
 </div>
 
@@ -110,12 +110,14 @@ input[type="file"] { display: none; }
 
 </div>
 
+<script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
 <script type="module">
 import { ESPLoader, Transport } from 'https://unpkg.com/esptool-js@0.5.7/bundle.js';
 
 let esploader = null;
 let transport = null;
-let firmwareData = null;
+let firmwareData = null;   // Legacy: single binary string for .bin files
+let flashParts = null;     // New: array of {data, address} for .zip packages
 let detectedChip = null;
 
 // Version manifest loaded from versions.json
@@ -205,7 +207,7 @@ async function loadVersionsManifest() {
         const resp = await fetch('https://api.github.com/repos/Smit1237/reticulum-espnow/releases/latest');
         if (resp.ok) {
             const data = await resp.json();
-            const files = data.assets.filter(a => a.name.endsWith('.bin')).map(a => a.name);
+            const files = data.assets.filter(a => a.name.endsWith('.zip') || a.name.endsWith('.bin')).map(a => a.name);
             versionsManifest = {
                 latest: data.tag_name,
                 versions: [{ version: data.tag_name, date: data.published_at.split('T')[0], files }]
@@ -223,12 +225,13 @@ function buildFirmwareMap(versionEntry) {
     availableFirmware = {};
     const ver = versionEntry.version;
     for (const filename of versionEntry.files) {
-        // firmware_<env>_<version>.bin -> extract env
-        const match = filename.match(/^firmware_(.+)_v[\d.]+(-[a-zA-Z0-9.]+)?\.bin$/);
+        // firmware_<env>_<version>.zip or .bin -> extract env
+        const match = filename.match(/^firmware_(.+)_v[\d.]+(-[a-zA-Z0-9.]+)?\.(zip|bin)$/);
         if (match && FIRMWARE_DB[match[1]]) {
             availableFirmware[match[1]] = {
                 name: filename,
-                url: `${SITE_BASE}/firmware/${ver}/${filename}`
+                url: `${SITE_BASE}/firmware/${ver}/${filename}`,
+                isZip: filename.endsWith('.zip')
             };
         }
     }
@@ -382,6 +385,7 @@ window.firmwareSelected = async function() {
     const env = document.getElementById('sel-firmware').value;
     const fwInfo = document.getElementById('fw-info');
     firmwareData = null;
+    flashParts = null;
     selectedFwUrl = null;
     fwInfo.style.display = 'none';
     updateFlashButton();
@@ -395,16 +399,40 @@ window.firmwareSelected = async function() {
     try {
         const resp = await fetch(fw.url);
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        const blob = await resp.blob();
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            firmwareData = e.target.result;
+
+        if (fw.isZip) {
+            // Zip package: extract manifest + binaries
+            const buf = await resp.arrayBuffer();
+            const zip = await JSZip.loadAsync(buf);
+            const manifestJson = await zip.file('manifest.json').async('string');
+            const manifest = JSON.parse(manifestJson);
+
+            flashParts = [];
+            let totalSize = 0;
+            for (const part of manifest.parts) {
+                const binData = await zip.file(part.path).async('binarystring');
+                flashParts.push({ data: binData, address: part.offset });
+                totalSize += binData.length;
+                log('  ' + part.path + ' @ 0x' + part.offset.toString(16) + ' (' + binData.length + ' bytes)');
+            }
+
             selectedFwUrl = fw.url;
-            fwInfo.textContent = fw.name + ' (' + (firmwareData.length / 1024).toFixed(1) + ' KB) -- ready';
-            log('Firmware loaded: ' + fw.name);
+            fwInfo.textContent = fw.name + ' (' + (totalSize / 1024).toFixed(1) + ' KB, ' + flashParts.length + ' parts) -- ready';
+            log('Firmware package loaded: ' + fw.name + ' (' + flashParts.length + ' parts)');
             updateFlashButton();
-        };
-        reader.readAsBinaryString(blob);
+        } else {
+            // Legacy .bin file
+            const blob = await resp.blob();
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                firmwareData = e.target.result;
+                selectedFwUrl = fw.url;
+                fwInfo.textContent = fw.name + ' (' + (firmwareData.length / 1024).toFixed(1) + ' KB) -- ready';
+                log('Firmware loaded: ' + fw.name);
+                updateFlashButton();
+            };
+            reader.readAsBinaryString(blob);
+        }
     } catch (e) {
         fwInfo.textContent = 'Download failed: ' + e.message + ' -- use file picker below';
         log('Download failed: ' + e.message);
@@ -454,29 +482,54 @@ window.connectDevice = async function() {
     }
 };
 
-window.fileSelected = function(input) {
+window.fileSelected = async function(input) {
     const file = input.files[0];
     if (!file) return;
 
     document.getElementById('file-name').textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
     document.getElementById('fw-info').style.display = 'none';
+    firmwareData = null;
+    flashParts = null;
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        firmwareData = e.target.result;
-        selectedFwUrl = 'local';
-        log('Firmware loaded from file: ' + file.name);
-        updateFlashButton();
-    };
-    reader.readAsBinaryString(file);
+    if (file.name.endsWith('.zip')) {
+        // Zip package from file
+        try {
+            const buf = await file.arrayBuffer();
+            const zip = await JSZip.loadAsync(buf);
+            const manifestJson = await zip.file('manifest.json').async('string');
+            const manifest = JSON.parse(manifestJson);
+
+            flashParts = [];
+            for (const part of manifest.parts) {
+                const binData = await zip.file(part.path).async('binarystring');
+                flashParts.push({ data: binData, address: part.offset });
+                log('  ' + part.path + ' @ 0x' + part.offset.toString(16) + ' (' + binData.length + ' bytes)');
+            }
+            selectedFwUrl = 'local';
+            log('Firmware package loaded: ' + file.name + ' (' + flashParts.length + ' parts)');
+            updateFlashButton();
+        } catch (e) {
+            log('Failed to read zip: ' + e.message);
+        }
+    } else {
+        // Legacy .bin file — flash at 0x10000 (app only)
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            firmwareData = e.target.result;
+            selectedFwUrl = 'local';
+            log('Firmware loaded from file: ' + file.name + ' (app-only, offset 0x10000)');
+            updateFlashButton();
+        };
+        reader.readAsBinaryString(file);
+    }
 };
 
 function updateFlashButton() {
-    document.getElementById('btn-flash').disabled = !(esploader && firmwareData);
+    document.getElementById('btn-flash').disabled = !(esploader && (firmwareData || flashParts));
 }
 
 window.flashFirmware = async function() {
-    if (!esploader || !firmwareData) return;
+    if (!esploader || (!firmwareData && !flashParts)) return;
 
     const btn = document.getElementById('btn-flash');
     btn.disabled = true;
@@ -489,8 +542,6 @@ window.flashFirmware = async function() {
     progressFill.style.width = '0%';
 
     try {
-        const offset = 0x0;  // Merged binary includes bootloader + partitions
-
         if (document.getElementById('chk-erase').checked) {
             log('Erasing flash...');
             setStatus('Erasing flash...', '');
@@ -498,10 +549,23 @@ window.flashFirmware = async function() {
             log('Flash erased.');
         }
 
-        log('Flashing at offset 0x' + offset.toString(16) + ' (' + firmwareData.length + ' bytes)...');
+        // Build fileArray: multi-part from zip or single from .bin
+        let fileArray;
+        if (flashParts) {
+            fileArray = flashParts;  // [{data, address}, ...] from zip manifest
+            log('Flashing ' + flashParts.length + ' parts...');
+            for (const p of flashParts) {
+                log('  0x' + p.address.toString(16) + ': ' + p.data.length + ' bytes');
+            }
+        } else {
+            // Legacy .bin — flash at 0x10000 (app only) or 0x0 (merged)
+            const offset = 0x10000;
+            fileArray = [{ data: firmwareData, address: offset }];
+            log('Flashing at offset 0x' + offset.toString(16) + ' (' + firmwareData.length + ' bytes)...');
+        }
 
         await esploader.writeFlash({
-            fileArray: [{ data: firmwareData, address: offset }],
+            fileArray: fileArray,
             flashSize: 'keep',
             eraseAll: false,
             compress: true,
@@ -616,4 +680,3 @@ window.toggleMonitor = async function() {
 
 </body>
 </html>
-<!-- rebuilt Wed Apr  8 02:35:47 RTZST 2026 -->
