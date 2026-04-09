@@ -25,6 +25,8 @@ jobs:
               retranslator_c6
               uart_c3
               uart_c6
+              serial_c3
+              serial_c6
           - group: xtensa-s3
             envs: >-
               client_s3
@@ -32,6 +34,7 @@ jobs:
               retranslator_s3_r2
               retranslator_s3_r8
               uart_s3
+              serial_s3
           - group: xtensa-esp32
             envs: >-
               client_esp32
@@ -43,6 +46,7 @@ jobs:
               retranslator_espcam
               retranslator_espcam_debug
               uart_esp32
+              serial_esp32
           - group: xtensa-other
             envs: >-
               client_tdisplay
@@ -50,6 +54,7 @@ jobs:
               uart_tdisplay
               retranslator_s2
               uart_s2
+              serial_s2
 
     steps:
       - name: Checkout

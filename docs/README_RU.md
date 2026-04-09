@@ -16,7 +16,8 @@
 
 - **Client** -- BLE мост между телефоном с Reticulum и ESP-NOW mesh сетью
 - **Retranslator** -- транспортный узел, маршрутизирующий и ретранслирующий пакеты
-- **UART Client** -- последовательный мост между ПК с Reticulum и mesh сетью
+- **RNode UART** -- RNode-эмулятор через USB Serial для ПК (type = RNodeInterface)
+- **Serial Bridge** -- чистый HDLC мост через USB Serial для ПК (type = SerialInterface, без протокольных накладных расходов)
 
 Все узлы обмениваются данными по ESP-NOW v2.0 с поддержкой 802.11 Long Range, обеспечивая до 500 м прямой видимости при размере полезной нагрузки 1470 байт.
 

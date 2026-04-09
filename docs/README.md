@@ -16,7 +16,8 @@ The system consists of three firmware types:
 
 - **Client** -- BLE bridge between a phone running Reticulum and the ESP-NOW mesh
 - **Retranslator** -- Transport node that routes and relays packets across the mesh
-- **UART Client** -- Serial bridge between a PC running Reticulum and the mesh
+- **RNode UART** -- RNode-emulating serial bridge for PC (type = RNodeInterface)
+- **Serial Bridge** -- Pure HDLC serial bridge for PC (type = SerialInterface, zero protocol overhead)
 
 All nodes communicate over ESP-NOW v2.0 with 802.11 Long Range mode, achieving up to 500m line-of-sight range with 1470-byte payload capacity.
 
@@ -214,9 +215,13 @@ Release builds use LOG_WARNING level (minimal output). Debug builds use LOG_TRAC
 | Double-tap BOOT | 2 quick taps | Toggle display and LEDs on/off (persisted) |
 | Hold BOOT 5+ seconds | Keep holding | Factory reset (clears identity and paths) |
 
-### UART Client (main_uart_client.cpp)
+### RNode UART (main_uart_client.cpp)
 
-The UART client is designed as a headless serial bridge. No button actions are assigned. The serial port is dedicated to KISS protocol communication with the host at 921600 baud.
+Emulates an RNode over USB serial using KISS protocol at 921600 baud. Configure in Reticulum as `type = RNodeInterface`. Includes full RNode handshake, radio config ACK, and flow control.
+
+### Serial Bridge (main_serial.cpp)
+
+Pure HDLC-framed serial bridge at 921600 baud. Zero protocol overhead — no handshake, no commands. Configure in Reticulum as `type = SerialInterface`. Maximum throughput path for PC-to-mesh connectivity.
 
 ## BLE Pairing
 
@@ -270,7 +275,7 @@ On Windows:
   speed = 921600
 ```
 
-The UART client emulates the RNode KISS protocol, so Reticulum connects to it as if it were a standard RNode device.
+The RNode UART client emulates the RNode KISS protocol, so Reticulum connects to it as if it were a standard RNode device. For maximum throughput without RNode overhead, use the Serial Bridge firmware with `type = SerialInterface`.
 
 ## Display Information
 
@@ -423,7 +428,7 @@ Transport nodes auto-reboot when heap fragmentation reaches the 40KB guard thres
 All three firmware types use event-driven main loops instead of busy polling:
 
 - **BLE Client**: blocks on ESP-NOW RX queue (`xQueueReceive` with 10ms timeout). Wakes instantly on mesh data, checks BLE RX and buttons at 100Hz during idle.
-- **UART Client**: same pattern with 10ms timeout, fast enough for 921600 baud serial.
+- **RNode UART / Serial Bridge**: same pattern with 10ms timeout, fast enough for 921600 baud serial.
 - **Retranslator**: blocks on ESPNOWInterface notification semaphore (50ms timeout), then calls `reticulum.loop()` for packet processing and transport jobs.
 
 CPU sleeps during the timeout wait (FreeRTOS idle task runs), reducing power consumption and chip temperature.

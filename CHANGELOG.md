@@ -1,5 +1,29 @@
 # Changelog
 
+## v1.1.5 -- Serial Bridge & Firmware Type Rename
+
+### New Firmware Type: Serial Bridge
+- **Pure HDLC SerialInterface bridge** — zero protocol overhead, no RNode handshake, no KISS commands. Raw Reticulum packets over HDLC-framed UART at 921600 baud.
+- Configure in Reticulum as `type = SerialInterface` (vs `type = RNodeInterface` for RNode UART)
+- Maximum throughput path for PC-to-mesh connectivity
+- Build environments: `serial_c3`, `serial_s3`, `serial_esp32`, `serial_c6`, `serial_s2`
+
+### Firmware Type Rename
+- **UART Client → RNode UART**: clarifies that the UART firmware emulates an RNode device using KISS protocol
+- Four firmware types now available:
+  - **BLE Client** — phone-to-mesh via BLE (Sideband/Columba)
+  - **Retranslator** — mesh relay/router (transport node)
+  - **RNode UART** — PC-to-mesh via USB serial (RNodeInterface, KISS protocol)
+  - **Serial Bridge** — PC-to-mesh via USB serial (SerialInterface, HDLC, zero overhead)
+
+### Updated
+- All documentation (EN, RU, HTML manual) updated with new firmware types
+- Web flasher updated with Serial Bridge firmware type
+- CI pipeline includes all serial_* environments
+- 31 total build environments across 6 chip families
+
+---
+
 ## v1.1.4 -- Zip Firmware Packages
 
 ### Firmware Packaging

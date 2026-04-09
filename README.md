@@ -38,7 +38,7 @@ ESP-NOW mesh networking firmware for ESP32 microcontrollers providing [Reticulum
 | ESP32-WROVER | 4.2 | None | 4MB | Good for transport |
 | ESP32-CAM | 4.2 | None | 2MB | Camera not used, PSRAM free |
 | ESP32-C6 | 5.0 (2M PHY) | None | No | WiFi 6 |
-| ESP32-S2 | None | None | No | Retranslator/UART only |
+| ESP32-S2 | None | None | No | Retranslator/RNode UART/Serial only |
 | LilyGO T-Display | 4.2 | ST7789 TFT | No | Color display |
 
 ## Firmware Types
@@ -47,7 +47,8 @@ ESP-NOW mesh networking firmware for ESP32 microcontrollers providing [Reticulum
 |------|---------|----------------|-------------|
 | **Client** | Phone-to-mesh bridge | BLE (Sideband/Columba) | `client_*` |
 | **Retranslator** | Mesh relay/router | None (infrastructure) | `retranslator_*` |
-| **UART Client** | PC-to-mesh bridge | USB Serial (921600 baud) | `uart_*` |
+| **RNode UART** | PC-to-mesh bridge (RNodeInterface) | USB Serial (921600 baud) | `uart_*` |
+| **Serial Bridge** | PC-to-mesh bridge (SerialInterface) | USB Serial HDLC (921600 baud) | `serial_*` |
 
 ## Quick Start
 
@@ -93,12 +94,17 @@ The flasher supports all released versions with automatic chip detection and fir
 | `retranslator_c6` | C6 | Transport | None |
 | `retranslator_s2` | S2 | Transport | None |
 | `retranslator_tdisplay` | ESP32 | Transport | ST7789 TFT |
-| `uart_c3` | C3 | UART Client | SSD1306 OLED |
-| `uart_s3` | S3 | UART Client | None |
-| `uart_esp32` | ESP32 | UART Client | None |
-| `uart_c6` | C6 | UART Client | None |
-| `uart_s2` | S2 | UART Client | None |
-| `uart_tdisplay` | ESP32 | UART Client | ST7789 TFT |
+| `uart_c3` | C3 | RNode UART | SSD1306 OLED |
+| `uart_s3` | S3 | RNode UART | None |
+| `uart_esp32` | ESP32 | RNode UART | None |
+| `uart_c6` | C6 | RNode UART | None |
+| `uart_s2` | S2 | RNode UART | None |
+| `uart_tdisplay` | ESP32 | RNode UART | ST7789 TFT |
+| `serial_c3` | C3 | Serial Bridge | SSD1306 OLED |
+| `serial_s3` | S3 | Serial Bridge | None |
+| `serial_esp32` | ESP32 | Serial Bridge | None |
+| `serial_c6` | C6 | Serial Bridge | None |
+| `serial_s2` | S2 | Serial Bridge | None |
 
 Debug variants available: `retranslator_c3_debug`, `retranslator_esp32_debug`, `retranslator_wrover_debug`, `retranslator_espcam_debug`
 

@@ -165,12 +165,19 @@ const FIRMWARE_DB = {
     'uart_c6':        { chip: 'c6',    type: 'uart', label: 'ESP32-C6' },
     'uart_s2':        { chip: 's2',    type: 'uart', label: 'ESP32-S2' },
     'uart_tdisplay':  { chip: 'esp32', type: 'uart', label: 'LilyGO T-Display' },
+    // Serial Bridge (HDLC SerialInterface)
+    'serial_c3':      { chip: 'c3',    type: 'serial', label: 'ESP32-C3 + OLED' },
+    'serial_s3':      { chip: 's3',    type: 'serial', label: 'ESP32-S3' },
+    'serial_esp32':   { chip: 'esp32', type: 'serial', label: 'ESP32 Generic' },
+    'serial_c6':      { chip: 'c6',    type: 'serial', label: 'ESP32-C6' },
+    'serial_s2':      { chip: 's2',    type: 'serial', label: 'ESP32-S2' },
 };
 
 const TYPE_LABELS = {
     'client':       'BLE Client (for Sideband/Columba)',
     'retranslator': 'Retranslator (Transport Node)',
-    'uart':         'UART Client (Serial Bridge, 921600 baud)',
+    'uart':         'RNode UART (RNodeInterface, 921600 baud)',
+    'serial':       'Serial Bridge (SerialInterface, HDLC, 921600 baud)',
 };
 
 const logEl = document.getElementById('log');
@@ -311,7 +318,7 @@ function populateTypeDropdown() {
         }
     }
 
-    for (const type of ['client', 'retranslator', 'uart']) {
+    for (const type of ['client', 'retranslator', 'uart', 'serial']) {
         if (types.has(type)) {
             const opt = document.createElement('option');
             opt.value = type;
