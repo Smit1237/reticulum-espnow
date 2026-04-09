@@ -93,6 +93,12 @@
 
 #endif
 
+// ---- Headless override: force-disable display (for bare C3 Super Mini etc.) ----
+#ifdef NO_DISPLAY
+#undef DISPLAY_TYPE
+#define DISPLAY_TYPE DISPLAY_NONE
+#endif
+
 // ---- Shared config (all boards) ----
 
 // ESP-NOW
