@@ -91,7 +91,8 @@ footer { text-align: center; color: var(--dim); padding: 30px 0; font-size: 0.8e
 <ul>
 <li><strong>Client</strong> -- BLE bridge between phone and ESP-NOW mesh</li>
 <li><strong>Retranslator</strong> -- transport node that routes and relays packets</li>
-<li><strong>UART Client</strong> -- serial bridge between PC and mesh (921600 baud)</li>
+<li><strong>RNode UART</strong> -- RNode-emulating serial bridge for PC (RNodeInterface, 921600 baud)</li>
+<li><strong>Serial Bridge</strong> -- pure HDLC serial bridge for PC (SerialInterface, zero overhead, 921600 baud)</li>
 </ul>
 
 <p>All nodes use ESP-NOW v2.0 with 1470-byte payloads and 802.11 Long Range mode for up to 500m line-of-sight range.</p>
@@ -125,7 +126,7 @@ footer { text-align: center; color: var(--dim); padding: 30px 0; font-size: 0.8e
 <h3>Retranslator</h3>
 <p>Runs the full microReticulum transport stack. Learns paths from announces, rebroadcasts announces, and forwards packets between nodes. Purely infrastructure -- no user-facing messaging capability. Invisible to Sideband/Columba users but extends mesh range.</p>
 
-<h3>UART Client</h3>
+<h3>RNode UART</h3>
 <p>Same as BLE client but communicates over USB serial at 921600 baud instead of BLE. For connecting a PC or laptop running Reticulum directly via USB cable. No BLE dependency, simpler and more reliable than wireless link.</p>
 
 <h2 id="quickstart">Quick Start</h2>
@@ -178,7 +179,7 @@ pio device monitor</code></pre>
 <tr><td>Hold BOOT</td><td>5+ seconds</td><td>Factory reset (erases identity and paths)</td></tr>
 </table>
 
-<h3>UART Client</h3>
+<h3>RNode UART</h3>
 <table>
 <tr><th>Action</th><th>Duration</th><th>Result</th></tr>
 <tr><td>Double-tap BOOT</td><td>2 quick taps</td><td>Toggle display + LEDs on/off (saved to NVS)</td></tr>
@@ -199,13 +200,23 @@ pio device monitor</code></pre>
 
 <p>To pair with a different phone, hold BOOT for 2+ seconds. This clears existing bonds and restarts advertising.</p>
 
-<h2 id="uart">UART Setup</h2>
+<h2 id="uart">Host Connection Setup</h2>
+<h3>RNode UART (uart_* firmware)</h3>
 <p>Add to Reticulum config (<code>~/.reticulum/config</code>):</p>
-<pre><code>[[ESP-NOW Serial]]
+<pre><code>[[ESP-NOW RNode]]
   type = RNodeInterface
   port = /dev/ttyUSB0    # Linux
   # port = COM11         # Windows
   speed = 921600</code></pre>
+
+<h3>Serial Bridge (serial_* firmware)</h3>
+<p>Add to Reticulum config (<code>~/.reticulum/config</code>):</p>
+<pre><code>[[ESP-NOW Bridge]]
+  type = SerialInterface
+  port = /dev/ttyUSB0    # Linux
+  # port = COM11         # Windows
+  speed = 921600</code></pre>
+<p>Serial Bridge has zero protocol overhead — maximum throughput, no handshake.</p>
 
 <h2 id="displays">Display Screens</h2>
 
@@ -365,7 +376,7 @@ pio device monitor</code></pre>
 <tr><td><code>retranslator_s2</code></td><td>ESP32-S2</td><td>None</td><td>48</td></tr>
 </table>
 
-<h3>UART Client (Serial Bridge) -- 6 environments</h3>
+<h3>RNode UART & Serial Bridge -- 6 environments</h3>
 <table>
 <tr><th>Environment</th><th>Board</th><th>Display</th></tr>
 <tr><td><code>uart_c3</code></td><td>ESP32-C3</td><td>SSD1306 OLED</td></tr>
@@ -382,7 +393,7 @@ pio device monitor</code></pre>
 <p>All firmware types use event-driven main loops instead of busy polling. The CPU sleeps during idle periods and wakes instantly when mesh data arrives:</p>
 <ul>
 <li><strong>BLE Client</strong> -- blocks on ESP-NOW RX queue (10ms timeout), 100Hz housekeeping</li>
-<li><strong>UART Client</strong> -- same pattern, 10ms timeout for 921600 baud serial</li>
+<li><strong>RNode UART / Serial Bridge</strong> -- same pattern, 10ms timeout for 921600 baud serial</li>
 <li><strong>Retranslator</strong> -- blocks on ESPNOWInterface semaphore (50ms timeout)</li>
 </ul>
 
@@ -452,7 +463,8 @@ pio device monitor</code></pre>
 <ul>
 <li><strong>Client</strong> -- BLE мост между телефоном и ESP-NOW mesh</li>
 <li><strong>Retranslator</strong> -- транспортный узел для маршрутизации пакетов</li>
-<li><strong>UART Client</strong> -- последовательный мост между ПК и mesh (921600 бод)</li>
+<li><strong>RNode UART</strong> -- RNode-эмулятор через Serial для ПК (RNodeInterface, 921600 бод)</li>
+<li><strong>Serial Bridge</strong> -- чистый HDLC мост через Serial для ПК (SerialInterface, 921600 бод)</li>
 </ul>
 
 <h2 id="hardware-ru">Поддерживаемое оборудование</h2>
@@ -484,7 +496,7 @@ pio device monitor</code></pre>
 <h3>Retranslator</h3>
 <p>Выполняет полный транспортный стек microReticulum. Изучает маршруты из анонсов, ретранслирует анонсы и перенаправляет пакеты между узлами. Чисто инфраструктурный -- невидим для пользователей Sideband/Columba, но расширяет зону покрытия mesh.</p>
 
-<h3>UART Client</h3>
+<h3>RNode UART</h3>
 <p>Аналогичен BLE клиенту, но взаимодействует через USB Serial на скорости 921600 бод. Для подключения ПК или ноутбука с Reticulum напрямую через USB кабель.</p>
 
 <h2 id="quickstart-ru">Быстрый старт</h2>
@@ -544,13 +556,23 @@ pio run -e client_c3 -t upload --upload-port COM24</code></pre>
 
 <div class="note">На платах без дисплея PIN выводится в Serial каждые 10 секунд. Подключитесь через USB на 115200 бод.</div>
 
-<h2 id="uart-ru">Настройка UART</h2>
+<h2 id="uart-ru">Настройка подключения к ПК</h2>
+<h3>RNode UART (прошивка uart_*)</h3>
 <p>Добавьте в конфиг Reticulum (<code>~/.reticulum/config</code>):</p>
-<pre><code>[[ESP-NOW Serial]]
+<pre><code>[[ESP-NOW RNode]]
   type = RNodeInterface
   port = /dev/ttyUSB0    # Linux
   # port = COM11         # Windows
   speed = 921600</code></pre>
+
+<h3>Serial Bridge (прошивка serial_*)</h3>
+<p>Добавьте в конфиг Reticulum (<code>~/.reticulum/config</code>):</p>
+<pre><code>[[ESP-NOW Bridge]]
+  type = SerialInterface
+  port = /dev/ttyUSB0    # Linux
+  # port = COM11         # Windows
+  speed = 921600</code></pre>
+<p>Serial Bridge имеет нулевые протокольные накладные расходы — максимальная пропускная способность.</p>
 
 <h2 id="displays-ru">Экраны устройств</h2>
 
