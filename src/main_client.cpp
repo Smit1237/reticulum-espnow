@@ -242,7 +242,9 @@ static RxCB rxCB;
 
 static void espnow_recv_cb(const esp_now_recv_info_t* info, const uint8_t* data, int len) {
 	if (!espnow_rx_queue || len <= 0 || len > ESPNOW_MAX_PAYLOAD) return;
-	espnow_rx_pkt_t pkt;
+	// Static to avoid 1472 bytes on the WiFi task stack (typically 4-8 KB).
+	// Safe: ESP-NOW callbacks are serialized by the WiFi task, no reentrancy.
+	static espnow_rx_pkt_t pkt;
 	pkt.len = (uint16_t)len;
 	memcpy(pkt.data, data, len);
 	xQueueSendFromISR(espnow_rx_queue, &pkt, nullptr);
@@ -316,7 +318,11 @@ void kiss_respond1(uint8_t cmd, uint8_t val) {
 
 // Build KISS DATA frame with escaping
 void kiss_send_data(const uint8_t* payload, size_t len) {
-	uint8_t buf[ESPNOW_MAX_PAYLOAD * 2 + 4];
+	// CRITICAL: must be static — stack-allocating 2944 bytes here plus the
+	// 1472-byte pkt in loop() would overflow the 8 KB Arduino task stack,
+	// causing silent reboots. Safe because only called from the main loop
+	// (single-threaded, no reentrancy).
+	static uint8_t buf[ESPNOW_MAX_PAYLOAD * 2 + 4];
 	size_t pos = 0;
 	buf[pos++] = FEND;
 	buf[pos++] = CMD_DATA;
@@ -594,7 +600,9 @@ void setup() {
 
 void loop() {
 	// --- Event wait: block until ESP-NOW packet or timeout ---
-	espnow_rx_pkt_t pkt;
+	// Static to avoid 1472 bytes on the loop task stack (combined with
+	// kiss_send_data's 2944-byte buffer, would overflow 8 KB stack).
+	static espnow_rx_pkt_t pkt;
 	bool gotPacket = (xQueueReceive(espnow_rx_queue, &pkt, pdMS_TO_TICKS(HOUSEKEEPING_MS)) == pdTRUE);
 
 	// --- Process ESP-NOW data (instant wake path) ---

@@ -125,8 +125,10 @@ void ESPNOWInterface::stop() {
 void ESPNOWInterface::loop() {
 	if (!_online) return;
 
-	// Process all queued received packets
-	rx_packet_t pkt;
+	// Process all queued received packets.
+	// Static: rx_packet_t is 1478 bytes — too much for the main task stack
+	// (8 KB default), especially with Transport + uStore call chains above us.
+	static rx_packet_t pkt;
 	while (xQueueReceive(_rx_queue, &pkt, 0) == pdTRUE) {
 		// Check against recently sent packets — skip self-heard broadcasts.
 		// This prevents Transport from allocating a full Packet object just
@@ -207,7 +209,9 @@ void ESPNOWInterface::on_incoming(const Bytes& data) {
 		return;
 	}
 
-	rx_packet_t pkt;
+	// Static: 1478 bytes too much for WiFi task stack (~4 KB).
+	// Safe: ESP-NOW callbacks are serialized by the WiFi task.
+	static rx_packet_t pkt;
 	memcpy(pkt.src_mac, recv_info->src_addr, 6);
 	pkt.len = (uint16_t)data_len;
 	memcpy(pkt.data, data, data_len);

@@ -78,7 +78,7 @@ static Preferences prefs;
 
 static void espnow_recv_cb(const esp_now_recv_info_t* info, const uint8_t* data, int len) {
 	if (!espnow_rx_queue || len <= 0 || len > ESPNOW_MAX_PAYLOAD) return;
-	espnow_rx_pkt_t pkt;
+	static espnow_rx_pkt_t pkt;  // static: 1472 B too much for WiFi task stack
 	pkt.len = (uint16_t)len;
 	memcpy(pkt.data, data, len);
 	xQueueSendFromISR(espnow_rx_queue, &pkt, nullptr);
@@ -222,7 +222,7 @@ void setup() {
 
 void loop() {
 	// --- Event wait: block until ESP-NOW packet or timeout ---
-	espnow_rx_pkt_t pkt;
+	static espnow_rx_pkt_t pkt;  // static: avoid 1472 B on loop stack
 	bool gotPacket = (xQueueReceive(espnow_rx_queue, &pkt, pdMS_TO_TICKS(HOUSEKEEPING_MS)) == pdTRUE);
 
 	// --- ESP-NOW RX → HDLC frame → Serial TX ---

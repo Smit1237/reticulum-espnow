@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.1.6 -- Stack overflow fix (stability)
+
+### Fixed
+- **Critical stack overflow** causing random reboots on all firmware types.
+  Large packet buffers (`espnow_rx_pkt_t` at 1478 B, KISS escape buffer at
+  2944 B) were stack-allocated in hot paths. Combined with display updates
+  and BLE/NimBLE operations, total stack usage exceeded the 8 KB Arduino
+  task limit, causing silent memory corruption and reboots under load.
+- Fixed in **ESPNOWInterface library** (affects all firmware types):
+  `rx_packet_t` in `loop()` and `on_data_recv()` callback moved to static.
+- Fixed in **BLE Client**, **RNode UART**, and **Serial Bridge** firmwares:
+  `espnow_rx_pkt_t` in `loop()` and recv callback, plus `kiss_send_data()`
+  escape buffer — all moved to static allocation.
+
+### Added
+- Headless ESP32-C3 generic variants (no OLED) for bare C3 Super Mini boards
+  without the 0.42" SSD1306 display. New envs: `client_c3_generic`,
+  `retranslator_c3_generic`, `uart_c3_generic`, `serial_c3_generic`.
+  Uses `-DNO_DISPLAY` to force `DISPLAY_TYPE=DISPLAY_NONE`, preventing
+  I2C `ESP_ERR_INVALID_STATE` errors from absent OLED.
+
 ## v1.1.5 -- Serial Bridge & Firmware Type Rename
 
 ### New Firmware Type: Serial Bridge
