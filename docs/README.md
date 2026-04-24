@@ -365,6 +365,7 @@ If power is lost during first boot, the device will boot normally on the next at
 | Environment | Board | Display | Notes |
 |------------|-------|---------|-------|
 | client_c3 | ESP32-C3 | SSD1306 OLED | Default target |
+| client_c3_generic | ESP32-C3 | None | Bare C3 Super Mini / DevKitM-1 (no OLED) |
 | client_tdisplay | T-Display | ST7789 TFT | Color display |
 | client_s3 | ESP32-S3 | None | RGB NeoPixel LED, dual serial |
 | client_esp32 | ESP32 | None | Classic ESP32 |
@@ -377,6 +378,7 @@ If power is lost during first boot, the device will boot normally on the next at
 |------------|-------|---------|-------|-------|
 | retranslator_c3 | ESP32-C3 | SSD1306 | 48 | Small networks |
 | retranslator_c3_debug | ESP32-C3 | SSD1306 | 48 | Verbose logging |
+| retranslator_c3_generic | ESP32-C3 | None | 48 | Bare C3, no OLED |
 | retranslator_tdisplay | T-Display | ST7789 | 48 | Color display |
 | retranslator_s3 | ESP32-S3 | None | 128 | No PSRAM variant |
 | retranslator_s3_r2 | ESP32-S3 | None | 1024 | 2MB quad PSRAM |
@@ -390,16 +392,30 @@ If power is lost during first boot, the device will boot normally on the next at
 | retranslator_c6 | ESP32-C6 | None | 48 | WiFi 6 |
 | retranslator_s2 | ESP32-S2 | None | 48 | No BLE, relay only |
 
-### UART Client (Serial Bridge)
+### RNode UART (RNodeInterface, KISS)
 
 | Environment | Board | Display | Notes |
 |------------|-------|---------|-------|
 | uart_c3 | ESP32-C3 | SSD1306 | With OLED status |
+| uart_c3_generic | ESP32-C3 | None | Bare C3, no OLED |
 | uart_tdisplay | T-Display | ST7789 | With TFT status |
 | uart_s3 | ESP32-S3 | None | Dual serial output |
 | uart_esp32 | ESP32 | None | Classic ESP32 |
+| uart_espcam | ESP32-CAM | None | CH340 locked to 115200 baud |
 | uart_c6 | ESP32-C6 | None | WiFi 6 |
 | uart_s2 | ESP32-S2 | None | No BLE available |
+
+### Serial Bridge (SerialInterface, raw HDLC)
+
+| Environment | Board | Display | Notes |
+|------------|-------|---------|-------|
+| serial_c3 | ESP32-C3 | SSD1306 | With OLED status |
+| serial_c3_generic | ESP32-C3 | None | Bare C3, no OLED |
+| serial_s3 | ESP32-S3 | None | Dual serial output |
+| serial_esp32 | ESP32 | None | Classic ESP32 |
+| serial_espcam | ESP32-CAM | None | CH340 locked to 115200 baud |
+| serial_c6 | ESP32-C6 | None | WiFi 6 |
+| serial_s2 | ESP32-S2 | None | No BLE available |
 
 ## Known Limitations
 

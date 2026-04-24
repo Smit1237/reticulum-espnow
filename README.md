@@ -26,7 +26,7 @@ ESP-NOW mesh networking firmware for ESP32 microcontrollers providing [Reticulum
 - **Display support**: SSD1306 OLED (72x40, 128x64) and ST7789 TFT (135x240 color)
 - **Passkey BLE pairing** with on-screen PIN display
 - **Factory reset** via 5s BOOT hold, display toggle via double-tap
-- **27 build environments** across 6 chip families
+- **37 build environments** across 6 chip families
 
 ## Supported Hardware
 
@@ -82,6 +82,7 @@ The flasher supports all released versions with automatic chip detection and fir
 | `client_s3` | S3 | BLE Client | None |
 | `client_esp32` | ESP32 | BLE Client | None |
 | `client_espcam` | ESP32-CAM | BLE Client | None |
+| `client_c3_generic` | C3 (headless) | BLE Client | None |
 | `client_c6` | C6 | BLE Client | None |
 | `client_tdisplay` | ESP32 | BLE Client | ST7789 TFT |
 | `retranslator_c3` | C3 | Transport | SSD1306 OLED |
@@ -94,19 +95,26 @@ The flasher supports all released versions with automatic chip detection and fir
 | `retranslator_c6` | C6 | Transport | None |
 | `retranslator_s2` | S2 | Transport | None |
 | `retranslator_tdisplay` | ESP32 | Transport | ST7789 TFT |
+| `retranslator_c3_generic` | C3 (headless) | Transport | None |
 | `uart_c3` | C3 | RNode UART | SSD1306 OLED |
 | `uart_s3` | S3 | RNode UART | None |
 | `uart_esp32` | ESP32 | RNode UART | None |
 | `uart_c6` | C6 | RNode UART | None |
 | `uart_s2` | S2 | RNode UART | None |
 | `uart_tdisplay` | ESP32 | RNode UART | ST7789 TFT |
+| `uart_c3_generic` | C3 (headless) | RNode UART | None |
+| `uart_espcam` | ESP32-CAM | RNode UART | None (115200 baud) |
 | `serial_c3` | C3 | Serial Bridge | SSD1306 OLED |
 | `serial_s3` | S3 | Serial Bridge | None |
 | `serial_esp32` | ESP32 | Serial Bridge | None |
 | `serial_c6` | C6 | Serial Bridge | None |
 | `serial_s2` | S2 | Serial Bridge | None |
+| `serial_c3_generic` | C3 (headless) | Serial Bridge | None |
+| `serial_espcam` | ESP32-CAM | Serial Bridge | None (115200 baud) |
 
 Debug variants available: `retranslator_c3_debug`, `retranslator_esp32_debug`, `retranslator_wrover_debug`, `retranslator_espcam_debug`
+
+Headless C3 variants (`*_c3_generic`) force `DISPLAY_TYPE=DISPLAY_NONE` for bare ESP32-C3 Super Mini / DevKitM-1 boards without the 0.42" OLED — prevents I2C `ESP_ERR_INVALID_STATE` errors on absent display hardware.
 
 ## Documentation
 

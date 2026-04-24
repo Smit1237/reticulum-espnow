@@ -1,5 +1,50 @@
 # Changelog
 
+## Unreleased -- LR mode fix, KISS escape, transport gate, HDLC cap
+
+### Fixed
+- **ESP-NOW LR mode silently disabled on retranslators.** `ESPNOWInterface.cpp`
+  used `#if ESPNOW_LONG_RANGE` but never included `board_config.h`, so the
+  macro evaluated as undefined and the LR protocol branch never compiled.
+  Meanwhile, client/UART/Serial firmware include `board_config.h` in their
+  `main_*.cpp` and configure LR inline — so the mesh was running asymmetric
+  PHYs: clients on 802.11 LR, retranslator on standard. Since LR requires both
+  ends to match, retranslators could not decode client frames. Fixed by
+  including `board_config.h` in the library.
+- **`_bitrate` now matches the configured PHY.** 250 kbps under LR vs 1 Mbps
+  under 802.11b/g/n. Reticulum uses this for rate heuristics; the old constant
+  1 Mbps was 4x too high under LR.
+- **KISS `kiss_respond()` now escapes FEND/FESC in the payload.** The previous
+  implementation emitted raw bytes, so any 0xC0 or 0xDB in a response
+  terminated the frame early on the host side. Rare in practice (radio-config
+  echoes use small integers) but technically broken. Fixed in both
+  `main_client.cpp` (BLE) and `main_uart_client.cpp` (UART).
+- **Retranslator loop now gates on successful transport setup.** Previously,
+  an exception in `reticulum_setup()` was caught, logged, and forgotten —
+  then `loop()` called methods on a default-constructed Reticulum, likely
+  crashing. Now a `transport_ready` flag skips transport work on failure
+  while keeping button/display/factory-reset responsive, and the failure is
+  shown on the display.
+- **Serial Bridge drops oversized frames.** `hdlc_send()` forwarded
+  full-length ESP-NOW packets (up to 1470 B) to the host regardless of
+  `HDLC_MTU=564`, while the RX path correctly capped at 564 — asymmetric MTU
+  corrupted the host parser. Now drops >MTU frames at the bridge.
+
+### Added
+- **ESP32-CAM support for RNode UART and Serial Bridge.** New build envs
+  `uart_espcam` and `serial_espcam` pinned at 115200 baud (CH340 on
+  ESP32-CAM-MB is unreliable above that). New `BOARD_ESPCAM` definition with
+  correct pins (GPIO 33 LED active-low, GPIO 0 button, 4MB PSRAM).
+  Existing `client_espcam` / `retranslator_espcam` envs also corrected to use
+  `BOARD_ESPCAM` instead of `BOARD_ESP32` for proper pin mapping.
+- **CI matrix closed to all 37 envs.** Previous workflow built 31 of 37 —
+  headless C3 variants and new ESP32-CAM UART/Serial envs were missing.
+
+### Changed
+- Moved `DisplayTypes.h` from `lib/Display/` to `include/` so project-wide
+  config (`board_config.h`) is includable from any library without cross-lib
+  path contortions.
+
 ## v1.1.6 -- Stack overflow fix (stability)
 
 ### Fixed

@@ -361,6 +361,7 @@ RX: 4521
 | Окружение | Плата | Дисплей | Примечания |
 |-----------|-------|---------|------------|
 | client_c3 | ESP32-C3 | SSD1306 OLED | Цель по умолчанию |
+| client_c3_generic | ESP32-C3 | Нет | Голый C3 Super Mini / DevKitM-1 (без OLED) |
 | client_tdisplay | T-Display | ST7789 TFT | Цветной дисплей |
 | client_s3 | ESP32-S3 | Нет | RGB NeoPixel LED, двойной Serial |
 | client_esp32 | ESP32 | Нет | Классический ESP32 |
@@ -373,6 +374,7 @@ RX: 4521
 |-----------|-------|---------|-----------|------------|
 | retranslator_c3 | ESP32-C3 | SSD1306 | 48 | Малые сети |
 | retranslator_c3_debug | ESP32-C3 | SSD1306 | 48 | Подробное логирование |
+| retranslator_c3_generic | ESP32-C3 | Нет | 48 | Голый C3, без OLED |
 | retranslator_tdisplay | T-Display | ST7789 | 48 | Цветной дисплей |
 | retranslator_s3 | ESP32-S3 | Нет | 128 | Без PSRAM |
 | retranslator_s3_r2 | ESP32-S3 | Нет | 1024 | 2 МБ quad PSRAM |
@@ -386,16 +388,30 @@ RX: 4521
 | retranslator_c6 | ESP32-C6 | Нет | 48 | WiFi 6 |
 | retranslator_s2 | ESP32-S2 | Нет | 48 | Без BLE, только ретрансляция |
 
-### UART Client (последовательный мост)
+### RNode UART (RNodeInterface, KISS)
 
 | Окружение | Плата | Дисплей | Примечания |
 |-----------|-------|---------|------------|
 | uart_c3 | ESP32-C3 | SSD1306 | С OLED статусом |
+| uart_c3_generic | ESP32-C3 | Нет | Голый C3, без OLED |
 | uart_tdisplay | T-Display | ST7789 | С TFT статусом |
 | uart_s3 | ESP32-S3 | Нет | Двойной Serial |
 | uart_esp32 | ESP32 | Нет | Классический ESP32 |
+| uart_espcam | ESP32-CAM | Нет | CH340 ограничен 115200 бод |
 | uart_c6 | ESP32-C6 | Нет | WiFi 6 |
 | uart_s2 | ESP32-S2 | Нет | BLE недоступен |
+
+### Serial Bridge (SerialInterface, чистый HDLC)
+
+| Окружение | Плата | Дисплей | Примечания |
+|-----------|-------|---------|------------|
+| serial_c3 | ESP32-C3 | SSD1306 | С OLED статусом |
+| serial_c3_generic | ESP32-C3 | Нет | Голый C3, без OLED |
+| serial_s3 | ESP32-S3 | Нет | Двойной Serial |
+| serial_esp32 | ESP32 | Нет | Классический ESP32 |
+| serial_espcam | ESP32-CAM | Нет | CH340 ограничен 115200 бод |
+| serial_c6 | ESP32-C6 | Нет | WiFi 6 |
+| serial_s2 | ESP32-S2 | Нет | BLE недоступен |
 
 ## Известные ограничения
 
