@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased -- LR mode fix, KISS escape, transport gate, HDLC cap
+## v1.1.7 -- LR mode fix, KISS escape, transport gate, HDLC cap
 
 ### Fixed
 - **ESP-NOW LR mode silently disabled on retranslators.** `ESPNOWInterface.cpp`
