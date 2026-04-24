@@ -68,6 +68,13 @@ inline void led_reset() {
 RNS::Reticulum reticulum({RNS::Type::NONE});
 RNS::Interface espnow_interface({RNS::Type::NONE});
 
+// Set to true only after reticulum_setup() completes end-to-end without
+// throwing. The main loop() gates all transport-dependent work (reticulum.loop(),
+// re-announce) on this — without the gate, a setup failure would leave loop()
+// calling methods on a default-constructed Reticulum, likely crashing.
+// Button, display, and LED handling continue regardless so the device stays
+// usable for factory-reset recovery.
+static bool transport_ready = false;
 
 // Track RX/TX for LED activity
 static size_t last_rxb = 0;
@@ -241,9 +248,12 @@ void reticulum_setup() {
 
 		INFOF("Transport ready! Free heap: %lu PSRAM free: %lu",
 			(unsigned long)ESP.getFreeHeap(), (unsigned long)ESP.getFreePsram());
+
+		transport_ready = true;
 	}
 	catch (const std::exception& e) {
 		ERRORF("Exception in reticulum_setup: %s", e.what());
+		Display::showBootScreen("TRANSPORT", "FAILED");
 	}
 }
 
@@ -319,46 +329,52 @@ void setup() {
 #define HOUSEKEEPING_MS 50  // 50ms — balances responsiveness with CPU savings
 
 void loop() {
-	// --- Event wait: block until ESP-NOW data or timeout ---
-	ESPNOWInterface::waitForData(pdMS_TO_TICKS(HOUSEKEEPING_MS));
+	if (transport_ready) {
+		// --- Event wait: block until ESP-NOW data or timeout ---
+		ESPNOWInterface::waitForData(pdMS_TO_TICKS(HOUSEKEEPING_MS));
 
-	// --- Run Reticulum (processes queued packets + transport jobs) ---
-	reticulum.loop();
+		// --- Run Reticulum (processes queued packets + transport jobs) ---
+		reticulum.loop();
 
-	// --- Periodic transport re-announce ---
-	// Retrieves the probe destination registered by Transport::start() and
-	// calls announce() on it. Safe because we reuse the existing registered
-	// object (no new Destination creation = no duplicate hash = no crash).
-	static unsigned long last_reannounce = 0;
-	if (millis() - last_reannounce > REANNOUNCE_INTERVAL_MS) {
-		last_reannounce = millis();
+		// --- Periodic transport re-announce ---
+		// Retrieves the probe destination registered by Transport::start() and
+		// calls announce() on it. Safe because we reuse the existing registered
+		// object (no new Destination creation = no duplicate hash = no crash).
+		static unsigned long last_reannounce = 0;
+		if (millis() - last_reannounce > REANNOUNCE_INTERVAL_MS) {
+			last_reannounce = millis();
 
-		if (probe_hash.size() > 0 && ESP.getFreeHeap() > 40000) {
-			try {
-				RNS::Destination probe = RNS::Transport::find_destination_from_hash(probe_hash);
-				if (probe) {
-					probe.announce();
-					reannounce_count++;
-					Serial.printf("Re-announce #%lu (heap: %lu)\r\n",
-						(unsigned long)reannounce_count, (unsigned long)ESP.getFreeHeap());
-				} else {
-					Serial.println("Re-announce: probe destination not found in registry");
+			if (probe_hash.size() > 0 && ESP.getFreeHeap() > 40000) {
+				try {
+					RNS::Destination probe = RNS::Transport::find_destination_from_hash(probe_hash);
+					if (probe) {
+						probe.announce();
+						reannounce_count++;
+						Serial.printf("Re-announce #%lu (heap: %lu)\r\n",
+							(unsigned long)reannounce_count, (unsigned long)ESP.getFreeHeap());
+					} else {
+						Serial.println("Re-announce: probe destination not found in registry");
+					}
 				}
+				catch (const std::exception& e) {
+					Serial.printf("Re-announce FAILED: %s\r\n", e.what());
+				}
+			} else if (probe_hash.size() == 0) {
+				Serial.println("Re-announce: probe hash not computed");
+			} else {
+				// Heap fragmented beyond recovery — reboot to start fresh.
+				// Identity and path table are persisted to flash, so the node
+				// comes back in ~2 seconds with a clean heap + fresh announce.
+				Serial.printf("Heap low (%lu), rebooting to defragment...\r\n",
+					(unsigned long)ESP.getFreeHeap());
+				delay(100);
+				ESP.restart();
 			}
-			catch (const std::exception& e) {
-				Serial.printf("Re-announce FAILED: %s\r\n", e.what());
-			}
-		} else if (probe_hash.size() == 0) {
-			Serial.println("Re-announce: probe hash not computed");
-		} else {
-			// Heap fragmented beyond recovery — reboot to start fresh.
-			// Identity and path table are persisted to flash, so the node
-			// comes back in ~2 seconds with a clean heap + fresh announce.
-			Serial.printf("Heap low (%lu), rebooting to defragment...\r\n",
-				(unsigned long)ESP.getFreeHeap());
-			delay(100);
-			ESP.restart();
 		}
+	} else {
+		// Transport failed to start. Keep the device responsive (button, display)
+		// so the user can factory-reset from the front panel.
+		delay(HOUSEKEEPING_MS);
 	}
 
 	// --- Button handling: double-tap = toggle display, hold 5s = factory reset ---
@@ -415,7 +431,9 @@ void loop() {
 	}
 
 	// --- LED: flash on packet activity (only when display is on) ---
-	if (!Display::isOn()) { led_off(); }
+	// Skip when transport failed — espnow_interface is a default-constructed
+	// NONE wrapper and rxb()/txb() would call methods on an invalid object.
+	if (!Display::isOn() || !transport_ready) { led_off(); }
 	else {
 		size_t cur_rxb = espnow_interface.rxb();
 		size_t cur_txb = espnow_interface.txb();
