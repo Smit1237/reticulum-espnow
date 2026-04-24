@@ -119,13 +119,25 @@ void kiss_send(const uint8_t* data, size_t len) {
 	Serial.write(data, len);
 }
 
+// FEND (0xC0) and FESC (0xDB) inside the payload MUST be escaped — otherwise
+// the host's parser terminates the frame early or mis-interprets the stream.
 void kiss_respond(uint8_t cmd, const uint8_t* data, size_t len) {
 	uint8_t buf[256];
 	size_t pos = 0;
 	buf[pos++] = FEND;
 	buf[pos++] = cmd;
-	for (size_t i = 0; i < len && pos < sizeof(buf) - 1; i++) {
-		buf[pos++] = data[i];
+	for (size_t i = 0; i < len; i++) {
+		uint8_t b = data[i];
+		if (b == FEND) {
+			if (pos + 3 > sizeof(buf)) break;
+			buf[pos++] = FESC; buf[pos++] = TFEND;
+		} else if (b == FESC) {
+			if (pos + 3 > sizeof(buf)) break;
+			buf[pos++] = FESC; buf[pos++] = TFESC;
+		} else {
+			if (pos + 2 > sizeof(buf)) break;
+			buf[pos++] = b;
+		}
 	}
 	buf[pos++] = FEND;
 	kiss_send(buf, pos);
