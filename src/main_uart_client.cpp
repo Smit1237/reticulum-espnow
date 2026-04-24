@@ -69,8 +69,12 @@ inline void led_pwr_on() {
 #define FW_MAJ          0x01
 #define FW_MIN          0x3C  // 1.60
 
-// UART speed — 921600 baud to match ESP-NOW throughput
+// UART speed — 921600 default to match ESP-NOW throughput.
+// Override with -DUART_BAUD=115200 for boards with CH340 USB-serial
+// (e.g. ESP32-CAM-MB) which are unreliable above 115200.
+#ifndef UART_BAUD
 #define UART_BAUD       921600
+#endif
 
 // --- ESP-NOW ---
 static const uint8_t BROADCAST_ADDR[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};

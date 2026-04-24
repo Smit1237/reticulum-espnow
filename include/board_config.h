@@ -50,6 +50,20 @@
 #define HAS_PSRAM       1
 #define BOARD_NAME      "ESP32-S3 Node"
 
+// ---- ESP32-CAM (AI-Thinker, 4MB PSRAM) ----
+#elif defined(BOARD_ESPCAM)
+
+#define DISPLAY_TYPE    DISPLAY_NONE
+#define LED_PWR_PIN     -1
+#define LED_USER_PIN    33      // Small red LED (GPIO 33, active LOW)
+#define LED_ACTIVE_LOW  1       // LED wired active LOW on ESP-CAM
+#define BUTTON_BOOT_PIN 0       // NOTE: GPIO 0 also drives camera XCLK
+#define HAS_PSRAM       1       // 4MB PSRAM on ESP-CAM
+#define BOARD_NAME      "ESP32-CAM"
+// NOTE: GPIO 2 is PSRAM/SD — do NOT use as LED.
+// GPIO 4 is flash LED — too bright for status, only use for explicit flash.
+// UART0 (GPIO 1 TX, GPIO 3 RX) is the only usable serial port.
+
 // ---- ESP32 classic generic DevKit ----
 #elif defined(BOARD_ESP32)
 
