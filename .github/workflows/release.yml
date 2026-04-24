@@ -19,13 +19,17 @@ jobs:
           - group: riscv
             envs: >-
               client_c3
+              client_c3_generic
               retranslator_c3
               retranslator_c3_debug
+              retranslator_c3_generic
               client_c6
               retranslator_c6
               uart_c3
+              uart_c3_generic
               uart_c6
               serial_c3
+              serial_c3_generic
               serial_c6
           - group: xtensa-s3
             envs: >-
@@ -45,6 +49,8 @@ jobs:
               client_espcam
               retranslator_espcam
               retranslator_espcam_debug
+              uart_espcam
+              serial_espcam
               uart_esp32
               serial_esp32
           - group: xtensa-other
