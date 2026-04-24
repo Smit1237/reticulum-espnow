@@ -347,21 +347,24 @@ pio device monitor</code></pre>
 
 <h2 id="envs">Build Environments</h2>
 
-<h3>Client (BLE Bridge) -- 5 environments</h3>
+<h3>Client (BLE Bridge) -- 7 environments</h3>
 <table>
 <tr><th>Environment</th><th>Board</th><th>Display</th></tr>
 <tr><td><code>client_c3</code></td><td>ESP32-C3</td><td>SSD1306 OLED</td></tr>
+<tr><td><code>client_c3_generic</code></td><td>ESP32-C3</td><td>None (bare Super Mini)</td></tr>
 <tr><td><code>client_tdisplay</code></td><td>T-Display</td><td>ST7789 TFT</td></tr>
 <tr><td><code>client_s3</code></td><td>ESP32-S3</td><td>None (RGB LED)</td></tr>
 <tr><td><code>client_esp32</code></td><td>ESP32</td><td>None</td></tr>
+<tr><td><code>client_espcam</code></td><td>ESP32-CAM</td><td>None</td></tr>
 <tr><td><code>client_c6</code></td><td>ESP32-C6</td><td>None</td></tr>
 </table>
 
-<h3>Retranslator (Transport) -- 9 environments</h3>
+<h3>Retranslator (Transport) -- 15 environments</h3>
 <table>
 <tr><th>Environment</th><th>Board</th><th>Display</th><th>Paths</th></tr>
 <tr><td><code>retranslator_c3</code></td><td>ESP32-C3</td><td>SSD1306</td><td>48</td></tr>
 <tr><td><code>retranslator_c3_debug</code></td><td>ESP32-C3</td><td>SSD1306</td><td>48</td></tr>
+<tr><td><code>retranslator_c3_generic</code></td><td>ESP32-C3</td><td>None</td><td>48</td></tr>
 <tr><td><code>retranslator_tdisplay</code></td><td>T-Display</td><td>ST7789</td><td>48</td></tr>
 <tr><td><code>retranslator_s3_r8</code></td><td>ESP32-S3</td><td>None</td><td>4096</td></tr>
 <tr><td><code>retranslator_s3_r2</code></td><td>ESP32-S3</td><td>None</td><td>1024</td></tr>
@@ -376,15 +379,29 @@ pio device monitor</code></pre>
 <tr><td><code>retranslator_s2</code></td><td>ESP32-S2</td><td>None</td><td>48</td></tr>
 </table>
 
-<h3>RNode UART & Serial Bridge -- 6 environments</h3>
+<h3>RNode UART -- 8 environments</h3>
 <table>
-<tr><th>Environment</th><th>Board</th><th>Display</th></tr>
-<tr><td><code>uart_c3</code></td><td>ESP32-C3</td><td>SSD1306 OLED</td></tr>
-<tr><td><code>uart_tdisplay</code></td><td>T-Display</td><td>ST7789 TFT</td></tr>
-<tr><td><code>uart_s3</code></td><td>ESP32-S3</td><td>None</td></tr>
-<tr><td><code>uart_esp32</code></td><td>ESP32</td><td>None</td></tr>
-<tr><td><code>uart_c6</code></td><td>ESP32-C6</td><td>None</td></tr>
-<tr><td><code>uart_s2</code></td><td>ESP32-S2</td><td>None</td></tr>
+<tr><th>Environment</th><th>Board</th><th>Display</th><th>Notes</th></tr>
+<tr><td><code>uart_c3</code></td><td>ESP32-C3</td><td>SSD1306 OLED</td><td>921600 baud</td></tr>
+<tr><td><code>uart_c3_generic</code></td><td>ESP32-C3</td><td>None</td><td>921600 baud, bare C3</td></tr>
+<tr><td><code>uart_tdisplay</code></td><td>T-Display</td><td>ST7789 TFT</td><td>921600 baud</td></tr>
+<tr><td><code>uart_s3</code></td><td>ESP32-S3</td><td>None</td><td>921600 baud</td></tr>
+<tr><td><code>uart_esp32</code></td><td>ESP32</td><td>None</td><td>921600 baud</td></tr>
+<tr><td><code>uart_espcam</code></td><td>ESP32-CAM</td><td>None</td><td>115200 baud (CH340 limit)</td></tr>
+<tr><td><code>uart_c6</code></td><td>ESP32-C6</td><td>None</td><td>921600 baud</td></tr>
+<tr><td><code>uart_s2</code></td><td>ESP32-S2</td><td>None</td><td>921600 baud</td></tr>
+</table>
+
+<h3>Serial Bridge -- 7 environments</h3>
+<table>
+<tr><th>Environment</th><th>Board</th><th>Display</th><th>Notes</th></tr>
+<tr><td><code>serial_c3</code></td><td>ESP32-C3</td><td>SSD1306 OLED</td><td>921600 baud</td></tr>
+<tr><td><code>serial_c3_generic</code></td><td>ESP32-C3</td><td>None</td><td>921600 baud, bare C3</td></tr>
+<tr><td><code>serial_s3</code></td><td>ESP32-S3</td><td>None</td><td>921600 baud</td></tr>
+<tr><td><code>serial_esp32</code></td><td>ESP32</td><td>None</td><td>921600 baud</td></tr>
+<tr><td><code>serial_espcam</code></td><td>ESP32-CAM</td><td>None</td><td>115200 baud (CH340 limit)</td></tr>
+<tr><td><code>serial_c6</code></td><td>ESP32-C6</td><td>None</td><td>921600 baud</td></tr>
+<tr><td><code>serial_s2</code></td><td>ESP32-S2</td><td>None</td><td>921600 baud</td></tr>
 </table>
 
 <h2 id="performance">Performance</h2>
