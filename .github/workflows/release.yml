@@ -162,6 +162,7 @@ jobs:
         with:
           ref: gh-pages
           path: gh-pages
+          fetch-depth: 0   # need history so `git log` can date each firmware/v*/ dir
 
       - name: Download firmware artifacts
         uses: actions/download-artifact@v4
@@ -198,8 +199,24 @@ jobs:
 
           # Generate versions.json by scanning firmware directories
           python3 - << 'PYEOF'
-          import json, os, glob
+          import json, os, glob, subprocess
           from datetime import datetime
+
+          def dir_date(path):
+              # Ask git for the commit that last touched this directory. Filesystem
+              # mtime is not reliable: `actions/checkout` resets every file's mtime
+              # to checkout time, so all historical release dirs would appear as
+              # "today". Git history is the actual source of truth.
+              try:
+                  out = subprocess.check_output(
+                      ["git", "log", "-1", "--format=%cI", "--", path],
+                      stderr=subprocess.DEVNULL,
+                  ).decode().strip()
+                  if out:
+                      return out.split("T")[0]
+              except subprocess.CalledProcessError:
+                  pass
+              return datetime.fromtimestamp(os.path.getmtime(path)).strftime("%Y-%m-%d")
 
           versions = []
           firmware_dir = "firmware"
@@ -211,10 +228,7 @@ jobs:
                   bins = sorted([os.path.basename(f) for f in glob.glob(os.path.join(d, "*.bin"))])
               if not bins:
                   continue
-              # Use directory mtime as date
-              mtime = os.path.getmtime(d)
-              date_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
-              versions.append({"version": ver, "date": date_str, "files": bins})
+              versions.append({"version": ver, "date": dir_date(d), "files": bins})
 
           manifest = {"latest": versions[0]["version"] if versions else "", "versions": versions}
 
