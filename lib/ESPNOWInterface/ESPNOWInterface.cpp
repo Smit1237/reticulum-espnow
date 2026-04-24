@@ -1,4 +1,5 @@
 #include "ESPNOWInterface.h"
+#include "board_config.h"
 
 #include <Log.h>
 #include <Utilities/OS.h>
@@ -29,8 +30,15 @@ ESPNOWInterface::ESPNOWInterface(const char* name /*= "ESPNOWInterface"*/, uint8
 {
 	_IN  = true;
 	_OUT = true;
-	_bitrate  = 1000000;  // ESP-NOW theoretical max ~1 Mbps
-	_HW_MTU   = ESPNOW_MAX_PAYLOAD;
+	// PHY rate must match what start() actually configures: standard 802.11b/g/n
+	// runs at 1 Mbps, LR mode runs at ~250 kbps. Reticulum uses _bitrate for
+	// transport rate heuristics, so it must reflect the live PHY.
+#if ESPNOW_LONG_RANGE
+	_bitrate = 250000;   // 802.11 LR PHY (Espressif proprietary)
+#else
+	_bitrate = 1000000;  // 802.11b/g/n baseline
+#endif
+	_HW_MTU = ESPNOW_MAX_PAYLOAD;
 }
 
 /*virtual*/ ESPNOWInterface::~ESPNOWInterface() {
