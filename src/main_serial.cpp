@@ -89,6 +89,11 @@ static void espnow_send_cb(const wifi_tx_info_t* ti, esp_now_send_status_t st) {
 // =============== HDLC TX to host (Serial) ===============
 
 void hdlc_send(const uint8_t* payload, size_t len) {
+	// Reticulum SerialInterface negotiates HW_MTU per-interface. Sending a
+	// frame larger than the host's configured MTU corrupts its parser state,
+	// so drop oversized packets rather than truncate them.
+	if (len > HDLC_MTU) return;
+
 	// Send HDLC frame: FLAG + escaped payload + FLAG
 	Serial.write(HDLC_FLAG);
 	for (size_t i = 0; i < len; i++) {
