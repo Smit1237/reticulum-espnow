@@ -31,6 +31,14 @@
   file-transfer rates it can block the NimBLE host task on a full CDC
   buffer, worsening the very bursts that caused drops.
 
+### Build
+- **Git dependencies pinned to exact commits** (microReticulum, Crypto,
+  microStore). Unpinned `lib_deps` meant CI installed whatever upstream
+  master was on release day: microReticulum had moved 0.3.0 -> 0.5.0
+  (Transport rework, persistence schema change) and broke the build; the
+  Crypto commit we tested against had been orphaned by an upstream rebase.
+  Builds are now reproducible; dependency bumps happen deliberately.
+
 ## v1.1.7 -- LR mode fix, KISS escape, transport gate, HDLC cap
 
 ### Fixed
