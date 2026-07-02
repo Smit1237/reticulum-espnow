@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased -- ESP-NOW TX pacing (fixes long messages / file transfers)
+## v1.1.8 -- ESP-NOW TX pacing (fixes long messages / file transfers)
 
 ### Fixed
 - **Long messages and file/image transfers failing while short messages
