@@ -89,6 +89,14 @@ static QueueHandle_t espnow_rx_queue = nullptr;
 
 static uint32_t tx_count = 0;
 static uint32_t rx_count = 0;
+static uint32_t tx_fail_count = 0;
+
+// TX pacing: given by espnow_send_cb when the radio finishes a frame.
+// The host does not wait for CMD_READY (RNodeInterface flow_control
+// defaults to off), so file transfers arrive at UART speed (92 KB/s at
+// 921600) while LR broadcast drains at 250-500 kbps. Without pacing the
+// shallow WiFi TX queue overflows and packets are dropped mid-window.
+static SemaphoreHandle_t espnow_tx_done = nullptr;
 
 // KISS parser state
 static uint8_t  kiss_buf[ESPNOW_MAX_PAYLOAD];
@@ -111,7 +119,26 @@ static void espnow_recv_cb(const esp_now_recv_info_t* info, const uint8_t* data,
 	xQueueSendFromISR(espnow_rx_queue, &pkt, nullptr);
 }
 
-static void espnow_send_cb(const wifi_tx_info_t* ti, esp_now_send_status_t st) { (void)ti; }
+static void espnow_send_cb(const wifi_tx_info_t* ti, esp_now_send_status_t st) {
+	(void)ti; (void)st;
+	if (espnow_tx_done) xSemaphoreGive(espnow_tx_done);
+}
+
+// Send with airtime pacing and NO_MEM retry — see BLE client for rationale.
+static bool espnow_send_paced(const uint8_t* data, size_t len) {
+	if (espnow_tx_done) xSemaphoreTake(espnow_tx_done, pdMS_TO_TICKS(100));
+	esp_err_t err = ESP_FAIL;
+	for (int attempt = 0; attempt < 8; attempt++) {
+		err = esp_now_send(BROADCAST_ADDR, data, len);
+		if (err != ESP_ERR_ESPNOW_NO_MEM) break;
+		delay(3);  // documented recovery for NO_MEM: delay, then retry
+	}
+	if (err == ESP_OK) return true;
+	// Hard failure: no send callback will fire — restore the pacing token.
+	if (espnow_tx_done) xSemaphoreGive(espnow_tx_done);
+	tx_fail_count++;
+	return false;
+}
 
 // =============== KISS TX to host (UART) ===============
 
@@ -179,8 +206,7 @@ void handle_kiss_frame() {
 
 	case CMD_DATA:
 		if (kiss_len > 0) {
-			esp_err_t err = esp_now_send(BROADCAST_ADDR, kiss_buf, kiss_len);
-			if (err == ESP_OK) tx_count++;
+			if (espnow_send_paced(kiss_buf, kiss_len)) tx_count++;
 			kiss_respond1(CMD_READY, 0x01);
 		}
 		break;
@@ -287,7 +313,11 @@ void updateDisplay() {
 // =============== SETUP ===============
 
 void setup() {
-	// UART for KISS protocol to host PC
+	// UART for KISS protocol to host PC.
+	// RX buffer must absorb host bursts while esp_now TX paces at LR
+	// airtime (~20-50 ms/frame): default 256 B holds only ~2.8 ms of
+	// 921600-baud input. 8 KB covers a full Reticulum resource window.
+	Serial.setRxBufferSize(8192);
 	Serial.begin(UART_BAUD);
 	delay(500);
 
@@ -314,6 +344,8 @@ void setup() {
 
 	// ESP-NOW init
 	espnow_rx_queue = xQueueCreate(ESPNOW_RX_QUEUE_SIZE, sizeof(espnow_rx_pkt_t));
+	espnow_tx_done = xSemaphoreCreateBinary();
+	xSemaphoreGive(espnow_tx_done);  // first send must not wait
 	WiFi.mode(WIFI_STA);
 	WiFi.disconnect();
 	esp_wifi_set_channel(ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE);

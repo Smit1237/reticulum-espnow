@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased -- ESP-NOW TX pacing (fixes long messages / file transfers)
+
+### Fixed
+- **Long messages and file/image transfers failing while short messages
+  worked.** Short texts are a single Reticulum packet; anything larger goes
+  over a Link as a Resource — a window of ~10 packets sent back-to-back.
+  The host side does not throttle (RNodeInterface ships with
+  `flow_control = False`, SerialInterface has none), so bursts arrived at
+  BLE/UART speed (30-90 KB/s) while LR broadcast drains at 250-500 kbps.
+  The shallow WiFi TX queue overflowed within a few frames and
+  `esp_now_send()` returned `ESP_ERR_ESPNOW_NO_MEM` — and every such packet
+  was **silently dropped with no retry**, stalling the transfer until it
+  failed. Fixed in all four firmware types:
+  - TX is now paced by the ESP-NOW send callback: each send waits (up to
+    100 ms) for the previous frame to clear the radio, throttling bursts to
+    actual airtime.
+  - `ESP_ERR_ESPNOW_NO_MEM` now retries up to 8 times with 3 ms delay (the
+    recovery the ESP-IDF documentation prescribes) instead of dropping.
+  - TX failure counters added (`tx_fail_count`, `ESPNOWInterface::txFails()`).
+- **BLE Client**: RX ring buffer grown 6 KB -> 16 KB so a full resource
+  window arriving over BLE is absorbed while the radio drains; overflow now
+  counts and logs dropped bytes instead of silently tearing KISS frames.
+- **RNode UART / Serial Bridge**: serial RX buffer grown to 8 KB
+  (default 256 B holds only ~2.8 ms of 921600-baud input, guaranteeing
+  overflow while a paced radio TX is in flight).
+
+### Changed
+- **BLE Client**: per-write BLE RX hexdump moved behind `DEBUG_BUILD` — at
+  file-transfer rates it can block the NimBLE host task on a full CDC
+  buffer, worsening the very bursts that caused drops.
+
 ## v1.1.7 -- LR mode fix, KISS escape, transport gate, HDLC cap
 
 ### Fixed

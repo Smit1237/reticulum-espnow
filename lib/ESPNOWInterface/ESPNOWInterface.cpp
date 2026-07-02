@@ -15,10 +15,12 @@ using namespace RNS;
 // Static member initialization
 QueueHandle_t ESPNOWInterface::_rx_queue = nullptr;
 SemaphoreHandle_t ESPNOWInterface::_rx_notify = nullptr;
+SemaphoreHandle_t ESPNOWInterface::_tx_done = nullptr;
 uint8_t ESPNOWInterface::_local_mac[6] = {0};
 volatile uint32_t ESPNOWInterface::_rx_drops = 0;
 uint32_t ESPNOWInterface::_rx_packets = 0;
 uint32_t ESPNOWInterface::_tx_packets = 0;
+uint32_t ESPNOWInterface::_tx_fails = 0;
 ESPNOWInterface::tx_filter_entry_t ESPNOWInterface::_tx_filter[TX_FILTER_SLOTS] = {};
 uint8_t ESPNOWInterface::_tx_filter_idx = 0;
 
@@ -61,6 +63,12 @@ bool ESPNOWInterface::start() {
 	// Create notification semaphore for event-driven loops
 	if (!_rx_notify) {
 		_rx_notify = xSemaphoreCreateBinary();
+	}
+
+	// Create TX pacing semaphore — available so the first send doesn't wait
+	if (!_tx_done) {
+		_tx_done = xSemaphoreCreateBinary();
+		xSemaphoreGive(_tx_done);
 	}
 
 	// Initialize WiFi in STA mode (required for ESP-NOW)
@@ -170,9 +178,22 @@ void ESPNOWInterface::loop() {
 				return;
 			}
 
-			esp_err_t result = esp_now_send(BROADCAST_ADDR, data.data(), data.size());
+			// Pace to airtime: wait for the previous frame's send callback.
+			// Transport forwards resource windows back-to-back; unpaced sends
+			// overflow the WiFi TX queue within a few frames at LR rates.
+			if (_tx_done) xSemaphoreTake(_tx_done, pdMS_TO_TICKS(100));
+
+			esp_err_t result = ESP_FAIL;
+			for (int attempt = 0; attempt < 8; attempt++) {
+				result = esp_now_send(BROADCAST_ADDR, data.data(), data.size());
+				if (result != ESP_ERR_ESPNOW_NO_MEM) break;
+				vTaskDelay(pdMS_TO_TICKS(3));  // documented NO_MEM recovery
+			}
 			if (result != ESP_OK) {
-				ERRORF("ESP-NOW: send failed, error 0x%X", result);
+				// Hard failure: no send callback will fire — restore the token
+				if (_tx_done) xSemaphoreGive(_tx_done);
+				_tx_fails++;
+				ERRORF("ESP-NOW: send failed, error 0x%X (fails: %lu)", result, (unsigned long)_tx_fails);
 			} else {
 				TRACEF("ESP-NOW: sent %lu bytes", data.size());
 				_tx_packets++;
@@ -202,6 +223,7 @@ void ESPNOWInterface::on_incoming(const Bytes& data) {
 // Static callback: called from WiFi task context when data is sent
 /*static*/ void ESPNOWInterface::on_data_sent(const wifi_tx_info_t* tx_info, esp_now_send_status_t status) {
 	(void)tx_info;
+	if (_tx_done) xSemaphoreGive(_tx_done);
 	if (status != ESP_NOW_SEND_SUCCESS) {
 		DEBUG("ESP-NOW: send callback reported failure");
 	}

@@ -109,11 +109,15 @@ static volatile bool bleConnected = false;
 static uint16_t bleMTU = 20;         // Negotiated MTU (updated in callback)
 static uint16_t bleConnHandle = 0;   // Connection handle for param updates
 
-// BLE RX ring buffer
-#define BLE_RX_BUF_SIZE 6144
+// BLE RX ring buffer — sized to absorb a full Reticulum resource window
+// (~10 packets, up to ~10 KB after KISS escaping) arriving over BLE while
+// the radio drains at LR broadcast rate. 6 KB was too small: overflow tears
+// KISS frames mid-stream and every torn packet kills a file transfer window.
+#define BLE_RX_BUF_SIZE 16384
 static uint8_t  bleRxBuf[BLE_RX_BUF_SIZE];
 static volatile size_t bleRxHead = 0;
 static volatile size_t bleRxTail = 0;
+static uint32_t ble_rx_drops = 0;
 
 // --- ESP-NOW ---
 static const uint8_t BROADCAST_ADDR[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -128,6 +132,15 @@ static QueueHandle_t espnow_rx_queue = nullptr;
 
 static uint32_t tx_count = 0;
 static uint32_t rx_count = 0;
+static uint32_t tx_fail_count = 0;
+
+// TX pacing: given by espnow_send_cb when the radio finishes a frame.
+// The host (Sideband) does NOT wait for CMD_READY (RNodeInterface ships
+// with flow_control=False), so file transfers arrive as fast as BLE can
+// deliver (~30-60 KB/s) while LR broadcast drains at 250-500 kbps. Without
+// pacing the shallow WiFi TX queue overflows after a few frames and
+// esp_now_send returns ESP_ERR_ESPNOW_NO_MEM for the rest of the window.
+static SemaphoreHandle_t espnow_tx_done = nullptr;
 
 // KISS parser state
 static uint8_t  kiss_buf[ESPNOW_MAX_PAYLOAD];
@@ -219,13 +232,23 @@ class RxCB : public NimBLECharacteristicCallbacks {
 		NimBLEAttValue val = pChar->getValue();
 		const uint8_t* data = val.data();
 		size_t len = val.size();
+#ifdef DEBUG_BUILD
+		// Per-write hexdump only in debug builds: at file-transfer rates this
+		// print can block the NimBLE host task on a full CDC TX buffer.
 		Serial.printf("BLE RX: %u bytes [", len);
 		for (size_t i = 0; i < len && i < 16; i++) Serial.printf("%02X ", data[i]);
 		if (len > 16) Serial.printf("...");
 		Serial.println("]");
+#endif
 		for (size_t i = 0; i < len; i++) {
 			size_t next = (bleRxHead + 1) % BLE_RX_BUF_SIZE;
-			if (next == bleRxTail) break;
+			if (next == bleRxTail) {
+				// Ring full — remaining bytes lost, current KISS frame is torn
+				ble_rx_drops += (uint32_t)(len - i);
+				Serial.printf("BLE RX overflow, dropped %u bytes (total %lu)\r\n",
+					(unsigned)(len - i), (unsigned long)ble_rx_drops);
+				break;
+			}
 			bleRxBuf[bleRxHead] = data[i];
 			bleRxHead = next;
 		}
@@ -250,7 +273,30 @@ static void espnow_recv_cb(const esp_now_recv_info_t* info, const uint8_t* data,
 	xQueueSendFromISR(espnow_rx_queue, &pkt, nullptr);
 }
 
-static void espnow_send_cb(const wifi_tx_info_t* ti, esp_now_send_status_t st) { (void)ti; }
+static void espnow_send_cb(const wifi_tx_info_t* ti, esp_now_send_status_t st) {
+	(void)ti; (void)st;
+	if (espnow_tx_done) xSemaphoreGive(espnow_tx_done);
+}
+
+// Send with airtime pacing and NO_MEM retry. Returns true if the frame was
+// accepted by ESP-NOW. Blocks up to 100 ms for the previous frame's send
+// callback so host bursts are throttled to actual radio rate instead of
+// overflowing the WiFi TX queue.
+static bool espnow_send_paced(const uint8_t* data, size_t len) {
+	if (espnow_tx_done) xSemaphoreTake(espnow_tx_done, pdMS_TO_TICKS(100));
+	esp_err_t err = ESP_FAIL;
+	for (int attempt = 0; attempt < 8; attempt++) {
+		err = esp_now_send(BROADCAST_ADDR, data, len);
+		if (err != ESP_ERR_ESPNOW_NO_MEM) break;
+		delay(3);  // documented recovery for NO_MEM: delay, then retry
+	}
+	if (err == ESP_OK) return true;
+	// Hard failure: no send callback will fire — restore the pacing token.
+	if (espnow_tx_done) xSemaphoreGive(espnow_tx_done);
+	tx_fail_count++;
+	Serial.printf("ESP-NOW TX FAIL 0x%X (fails: %lu)\r\n", err, (unsigned long)tx_fail_count);
+	return false;
+}
 
 // =============== BLE TX helpers ===============
 
@@ -369,13 +415,9 @@ void handle_kiss_frame() {
 	case CMD_DATA:
 		if (kiss_len > 0) {
 			handshake_logged = true;  // Stop logging handshake after first data
-			esp_err_t err = esp_now_send(BROADCAST_ADDR, kiss_buf, kiss_len);
-			if (err == ESP_OK) {
+			if (espnow_send_paced(kiss_buf, kiss_len)) {
 				tx_count++;
-			} else {
-				Serial.printf("ESP-NOW TX FAIL 0x%X\r\n", err);
 			}
-			// esp_now_send() is async — no delay needed before signaling READY
 			kiss_respond1(CMD_READY, 0x01);
 		}
 		break;
@@ -534,6 +576,8 @@ void setup() {
 
 	// Step 1: WiFi + ESP-NOW
 	espnow_rx_queue = xQueueCreate(ESPNOW_RX_QUEUE_SIZE, sizeof(espnow_rx_pkt_t));
+	espnow_tx_done = xSemaphoreCreateBinary();
+	xSemaphoreGive(espnow_tx_done);  // first send must not wait
 	WiFi.mode(WIFI_STA);
 	WiFi.disconnect();
 	esp_wifi_set_channel(ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE);
