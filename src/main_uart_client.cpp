@@ -5,6 +5,7 @@
 #include <WiFi.h>
 #include <esp_wifi.h>
 #include <esp_now.h>
+#include <esp_log.h>
 #include <Preferences.h>
 
 // LED helpers — support GPIO (active high/low) and RGB NeoPixel
@@ -319,6 +320,11 @@ void setup() {
 	// 921600-baud input. 8 KB covers a full Reticulum resource window.
 	Serial.setRxBufferSize(8192);
 	Serial.begin(UART_BAUD);
+
+	// Suppress ALL log output — Serial is the KISS data channel to the host.
+	// ESP-IDF logs (WiFi driver etc.) would inject noise into the stream.
+	esp_log_level_set("*", ESP_LOG_NONE);
+
 	delay(500);
 
 #if LED_USER_PIN >= 0
